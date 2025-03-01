@@ -82,7 +82,8 @@ CREATE TABLE [tab].tables (
 CREATE TABLE [boo].bookings (
     bookingID INT IDENTITY(1,1) PRIMARY KEY,
     customerID INT NOT NULL,
-    roomID INT NOT NULL,
+    roomID INT,
+    tableID INT,
     check_in_date DATE NOT NULL,
     check_out_date DATE NOT NULL,
     booking_status VARCHAR(20) CHECK (booking_status IN ('Booked', 'Checked-in', 'Checked-out', 'Cancelled')) DEFAULT 'Booked',
@@ -90,7 +91,8 @@ CREATE TABLE [boo].bookings (
 	discount DECIMAL(10,2),
     created_at DATETIME DEFAULT GETDATE(),
     FOREIGN KEY (customerID) REFERENCES [cus].customers(customerID) ON DELETE CASCADE,
-    FOREIGN KEY (roomID) REFERENCES [room].rooms(roomID) ON DELETE CASCADE
+    FOREIGN KEY (roomID) REFERENCES [room].rooms(roomID) ON DELETE CASCADE,
+    FOREIGN KEY (tableID) REFERENCES [room].rooms(tableID) ON DELETE CASCADE
 );
 
 -- 💳 Payments Table
