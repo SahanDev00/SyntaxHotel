@@ -30,6 +30,8 @@ CREATE TABLE [cus].customers (
     phone VARCHAR(15),
     email VARCHAR(100) UNIQUE,
     address TEXT,
+    status VARCHAR(20) CHECK (status IN ('Active', 'Innactive', 'Banned')) DEFAULT 'Active',
+    banned_reason TEXT ,
     created_at DATETIME DEFAULT GETDATE(),
     FOREIGN KEY (customer_categoryID) REFERENCES [cus].customerCategory(categoryID)
 );

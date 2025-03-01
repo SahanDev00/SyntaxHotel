@@ -40,15 +40,15 @@ const Sidebar = ({activePage, setActivePage }) => {
             <Bed className='sidebar-icon' />
             <li className='sidebar-item'>Rooms</li>
           </ul>
-          <ul className='sidebar-nav group'>
+          <ul className={`sidebar-nav group ${activePage === 'tables' && 'text-purple-700'}`} onClick={() => setActivePage('tables')}>
             <MdOutlineTableBar className='sidebar-icon' />
             <li className='sidebar-item'>Tables</li>
           </ul>
-          <ul className='sidebar-nav group'>
+          <ul className={`sidebar-nav group ${activePage === 'inventory' && 'text-purple-700'}`} onClick={() => setActivePage('inventory')}>
             <TbFridge className='sidebar-icon' />
             <li className='sidebar-item'>Inventory</li>
           </ul>
-          <ul className='sidebar-nav group'>
+          <ul className={`sidebar-nav group ${activePage === 'hotel-notes' && 'text-purple-700'}`} onClick={() => setActivePage('hotel-notes')}>
             <CgNotes className='sidebar-icon' />
             <li className='sidebar-item'>Hotel Notes</li>
           </ul>
@@ -60,19 +60,19 @@ const Sidebar = ({activePage, setActivePage }) => {
             <ChevronDown className={`sidebar-icon duration-200 ${isDropDownOpen === 'HotelManagement' && 'rotate-180'}`} />
           </ul>
           <ul className={`duration-200 overflow-hidden ${isDropDownOpen === 'HotelManagement' ? 'h-[50px]' : 'h-0'}`}>
-              <li className='sidebar-dropdown-item'><FaRegCircle className='size-2 mb-1' /> Room Types</li>
-              <li className='sidebar-dropdown-item'><FaRegCircle className='size-2 mb-1' />Table Types</li>
+              <li className={`sidebar-dropdown-item ${activePage === 'room-types' && 'text-purple-700'}`} onClick={() => setActivePage('room-types')}><FaRegCircle className='size-2 mb-1' /> Room Types</li>
+              <li className={`sidebar-dropdown-item ${activePage === 'table-types' && 'text-purple-700'}`} onClick={() => setActivePage('table-types')}><FaRegCircle className='size-2 mb-1' />Table Types</li>
           </ul>
         </div>
 
         {/* Customer Management */}
         <div className='w-full mt-4'>
           <h1 className='sidebar-main'>Customer Management</h1>
-          <ul className='sidebar-nav group'>
+          <ul className={`sidebar-nav group ${activePage === 'customers' && 'text-purple-700'}`} onClick={() => setActivePage('customers')}>
             <FiUser className='sidebar-icon' />
             <li className='sidebar-item'>Customers</li>
           </ul>
-          <ul className='sidebar-nav group'>
+          <ul className={`sidebar-nav group ${activePage === 'customer-notes' && 'text-purple-700'}`} onClick={() => setActivePage('customer-notes')}>
             <CgNotes className='sidebar-icon' />
             <li className='sidebar-item'>Customer Notes</li>
           </ul>
@@ -84,7 +84,7 @@ const Sidebar = ({activePage, setActivePage }) => {
             <ChevronDown className={`sidebar-icon duration-200 ${isDropDownOpen === 'CustomerManagement' && 'rotate-180'}`} />
           </ul>
           <ul className={`duration-200 overflow-hidden ${isDropDownOpen === 'CustomerManagement' ? 'h-[30px]' : 'h-0'}`}>
-              <li className='sidebar-dropdown-item'><FaRegCircle className='size-2 mb-1' />Customer Category</li>
+              <li className={`sidebar-dropdown-item ${activePage === 'customer-category' && 'text-purple-700'}`} onClick={() => setActivePage('customer-category')}><FaRegCircle className='size-2 mb-1' />Customer Category</li>
           </ul>
         </div>
 
