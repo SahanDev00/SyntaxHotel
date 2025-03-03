@@ -1,4 +1,3 @@
-Table Quaries
 
 CREATE SCHEMA [user];
 CREATE SCHEMA [cus];
@@ -10,6 +9,9 @@ CREATE SCHEMA [hs];
 CREATE SCHEMA [st];
 CREATE SCHEMA [ser];
 CREATE SCHEMA [tab];
+CREATE SCHEMA [sal];
+CREATE SCHEMA [note];
+CREATE SCHEMA [syst];
 
 -- 🚀 Users Table (Admin, Staff, Customers)
 CREATE TABLE [user].users (
@@ -19,7 +21,24 @@ CREATE TABLE [user].users (
     role VARCHAR(20) CHECK (role IN ('Admin', 'Manager', 'Receptionist', 'Staff', 'Customer')) NOT NULL,
     email VARCHAR(100) UNIQUE,
     phone VARCHAR(15),
+    status VARCHAR(20) CHECK (status IN ('Active', 'Innactive')) DEFAULT 'Active',
     created_at DATETIME DEFAULT GETDATE()
+);
+
+-- 🎭 Roles Table (Role-Based Access Control)
+CREATE TABLE [user].roles (
+    roleID INT IDENTITY(1,1) PRIMARY KEY,
+    role_name VARCHAR(20) CHECK (role_name IN ('Admin', 'Manager', 'Receptionist', 'Staff')) NOT NULL,
+    permissions NVARCHAR(MAX) -- JSON format for permissions
+);
+
+
+-- 🏨 Customer Categories Table
+CREATE TABLE [cus].customerCategory (
+    categoryID INT IDENTITY(1,1) PRIMARY KEY,
+    category_name VARCHAR(100) NOT NULL,
+	additionalFeeRate VARCHAR(100) DEFAULT 0 NOT NULL,
+	additionalFeeAmount VARCHAR(100) DEFAULT 0 NOT NULL,
 );
 
 -- 🏨 Customers Table
@@ -34,14 +53,6 @@ CREATE TABLE [cus].customers (
     banned_reason TEXT ,
     created_at DATETIME DEFAULT GETDATE(),
     FOREIGN KEY (customer_categoryID) REFERENCES [cus].customerCategory(categoryID)
-);
-
--- 🏨 Customer Categories Table
-CREATE TABLE [cus].customerCategory (
-    categoryID INT IDENTITY(1,1) PRIMARY KEY,
-    category_name VARCHAR(100) NOT NULL,
-	additionalFeeRate VARCHAR(100) DEFAULT 0 NOT NULL,
-	additionalFeeAmount VARCHAR(100) DEFAULT 0 NOT NULL,
 );
 
 -- 🏠 Room Types Table
@@ -88,11 +99,11 @@ CREATE TABLE [boo].bookings (
     check_out_date DATE NOT NULL,
     booking_status VARCHAR(20) CHECK (booking_status IN ('Booked', 'Checked-in', 'Checked-out', 'Cancelled')) DEFAULT 'Booked',
     total_price DECIMAL(10,2),
-	discount DECIMAL(10,2),
+    paid_status VARCHAR(20) CHECK (paid_status IN ('Paid', 'Pending', 'Cancelled')) DEFAULT 'Pending',
     created_at DATETIME DEFAULT GETDATE(),
     FOREIGN KEY (customerID) REFERENCES [cus].customers(customerID) ON DELETE CASCADE,
     FOREIGN KEY (roomID) REFERENCES [room].rooms(roomID) ON DELETE CASCADE,
-    FOREIGN KEY (tableID) REFERENCES [room].rooms(tableID) ON DELETE CASCADE
+    FOREIGN KEY (tableID) REFERENCES [tab].tables(tableID) ON DELETE CASCADE
 );
 
 -- 💳 Payments Table
@@ -135,6 +146,12 @@ CREATE TABLE [hs].housekeeping (
     FOREIGN KEY (staffID) REFERENCES [user].users(userID) ON DELETE CASCADE
 );
 
+-- 🏢 Staff positions Table
+CREATE TABLE [st].staff_positions (
+    positionID INT IDENTITY(1,1) PRIMARY KEY,
+    position_name VARCHAR(100) NOT NULL
+);
+
 -- 🏢 Staff Table
 CREATE TABLE [st].staff (
     staffID INT IDENTITY(1,1) PRIMARY KEY,
@@ -143,18 +160,14 @@ CREATE TABLE [st].staff (
     lastName VARCHAR(50) NOT NULL,
     NIC VARCHAR(50) NOT NULL,
     mobileNumber VARCHAR(50) NOT NULL,
-    position VARCHAR(50) NOT NULL,
+    positionID INT NOT NULL,
     salary DECIMAL(10,2) NOT NULL,
     hired_date DATE NOT NULL,
-    FOREIGN KEY (userID) REFERENCES [user].users(userID) ON DELETE CASCADE
+    status VARCHAR(20) CHECK (status IN ('Active', 'Innactive', 'Resigned')) DEFAULT 'Active',
+    FOREIGN KEY (userID) REFERENCES [user].users(userID) ON DELETE CASCADE,
+    FOREIGN KEY (positionID) REFERENCES [st].staff_positions(positionID)
 );
 
--- 🎭 Roles Table (Role-Based Access Control)
-CREATE TABLE [user].roles (
-    roleID INT IDENTITY(1,1) PRIMARY KEY,
-    role_name VARCHAR(20) CHECK (role_name IN ('Admin', 'Manager', 'Receptionist', 'Staff')) NOT NULL,
-    permissions NVARCHAR(MAX) -- JSON format for permissions
-);
 
 -- 🏨 Extra Services (Spa, Laundry, etc.)
 CREATE TABLE [ser].extra_services (
@@ -174,3 +187,29 @@ CREATE TABLE [ser].service_orders (
     FOREIGN KEY (bookingID) REFERENCES [boo].bookings(bookingID) ON DELETE CASCADE,
     FOREIGN KEY (serviceID) REFERENCES [ser].extra_services(serviceID) ON DELETE CASCADE
 );
+
+-- 🛎️ inventory Table 
+CREATE TABLE [inv].inventory (
+    itemID INT IDENTITY(1,1) PRIMARY KEY,
+    item_name VARCHAR(50) NOT NULL,
+    item_description VARCHAR(MAX) NOT NULL,
+    itemPrice DECIMAL(10,2) NOT NULL,
+    status VARCHAR(20) CHECK (status IN ('Available', 'Unavailable')) DEFAULT 'Available'
+);
+
+-- 🛎️ inventory Table 
+CREATE TABLE [note].hotel_notes (
+    noteID INT IDENTITY(1,1) PRIMARY KEY,
+    note VARCHAR(MAX) NOT NULL,
+    userID INT Not Null,
+    FOREIGN KEY (userID) REFERENCES [user].users(userID)
+);
+
+CREATE TABLE [syst].Settings (
+	SettingID INT IDENTITY(1,1) PRIMARY KEY,
+	SettingName VARCHAR(MAX) NOT NULL,
+	SettingValue VARCHAR(MAX) NOT NULL
+)
+
+INSERT syst.Settings (SettingName, SettingValue) VALUES ('APIKey', '0661');
+INSERT syst.Settings (SettingName, SettingValue) VALUES ('Version', '0.01');

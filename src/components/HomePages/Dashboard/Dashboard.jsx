@@ -40,7 +40,8 @@ const Dashboard = () => {
     { title: 'New Customers', count: 128, color: 'bg-yellow-50' },
     { title: 'New Orders', count: 76, color: 'bg-orange-50' },
     { title: 'Available Rooms', count: 18, color: 'bg-purple-50' },
-    { title: 'Available Tables', count: 22, color: 'bg-red-50' }
+    { title: 'Available Tables', count: 22, color: 'bg-red-50' },
+    { title: 'Pending Invoices', count: 10, color: 'bg-red-100' }
   ]
 
   // Dummy Data for Upcoming Events

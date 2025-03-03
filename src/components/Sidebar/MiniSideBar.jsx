@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import {Bed, Box, ChevronDown, LucideWandSparkles, Menu} from 'lucide-react'
+import {Bed, Box, ChevronDown, LucideWandSparkles, Menu, ReceiptText} from 'lucide-react'
 import { MdOutlineCleaningServices, MdOutlineTableBar } from 'react-icons/md'
 import { TbCategory, TbFridge } from 'react-icons/tb'
 import { CgNotes } from 'react-icons/cg'
@@ -92,15 +92,15 @@ const MiniSidebar = ({activePage, setActivePage }) => {
         {/* Bookings Management */}
         <div className='w-full mt-4'>
           <h1 className='sidebar-main'>Booking Management</h1>
-          <ul className='sidebar-nav group'>
+          <ul className={`sidebar-nav group ${activePage === 'room-bookings' && 'text-purple-700'}`} onClick={() => setActivePage('room-bookings')}>
             <Bed className='sidebar-icon' />
             <li className='sidebar-item'>Room Bookings</li>
           </ul>
-          <ul className='sidebar-nav group'>
+          <ul className={`sidebar-nav group ${activePage === 'table-bookings' && 'text-purple-700'}`} onClick={() => setActivePage('table-bookings')}>
             <MdOutlineTableBar className='sidebar-icon' />
             <li className='sidebar-item'>Table Bookings</li>
           </ul>
-          <ul className='sidebar-nav group'>
+          <ul className={`sidebar-nav group ${activePage === 'booking-notes' && 'text-purple-700'}`} onClick={() => setActivePage('booking-notes')}>
             <CgNotes className='sidebar-icon' />
             <li className='sidebar-item'>Booking Notes</li>
           </ul>
@@ -109,7 +109,7 @@ const MiniSidebar = ({activePage, setActivePage }) => {
         {/* Staff Management */}
         <div className='w-full mt-4'>
           <h1 className='sidebar-main'>Staff Management</h1>
-          <ul className='sidebar-nav group'>
+          <ul className={`sidebar-nav group ${activePage === 'staff' && 'text-purple-700'}`} onClick={() => setActivePage('staff')}>
             <IoIosPeople className='sidebar-icon' />
             <li className='sidebar-item'>Staff</li>
           </ul>
@@ -121,18 +121,18 @@ const MiniSidebar = ({activePage, setActivePage }) => {
             <ChevronDown className={`sidebar-icon duration-200 ${isDropDownOpen === 'StaffManagement' && 'rotate-180'}`} />
           </ul>
           <ul className={`duration-200 overflow-hidden ${isDropDownOpen === 'StaffManagement' ? 'h-[30px]' : 'h-0'}`}>
-              <li className='sidebar-dropdown-item'><FaRegCircle className='size-2 mb-1' />Positions</li>
+              <li className={`sidebar-dropdown-item ${activePage === 'staff-positions' && 'text-purple-700'}`} onClick={() => setActivePage('staff-positions')}><FaRegCircle className='size-2 mb-1' />Positions</li>
           </ul>
         </div>
 
         {/* Services Management */}
         <div className='w-full mt-4'>
           <h1 className='sidebar-main'>Extra Services</h1>
-          <ul className='sidebar-nav group'>
+          <ul className={`sidebar-nav group ${activePage === 'service-orders' && 'text-purple-700'}`} onClick={() => setActivePage('service-orders')}>
             <Box className='sidebar-icon' />
             <li className='sidebar-item'>Service Orders</li>
           </ul>
-          <ul className='sidebar-nav group'>
+          <ul className={`sidebar-nav group ${activePage === 'services' && 'text-purple-700'}`} onClick={() => setActivePage('services')}>
             <LucideWandSparkles className='sidebar-icon' />
             <li className='sidebar-item'>Services</li>
           </ul>
@@ -141,20 +141,29 @@ const MiniSidebar = ({activePage, setActivePage }) => {
         {/* House Management */}
         <div className='w-full mt-4'>
           <h1 className='sidebar-main'>Housekeeping Management</h1>
-          <ul className='sidebar-nav group'>
+          <ul className={`sidebar-nav group ${activePage === 'housekeeping' && 'text-purple-700'}`} onClick={() => setActivePage('housekeeping')}>
             <MdOutlineCleaningServices className='sidebar-icon' />
             <li className='sidebar-item'>Housekeeping</li>
+          </ul>
+        </div>
+
+        {/* Reports */}
+        <div className='w-full mt-4'>
+          <h1 className='sidebar-main'>Reports</h1>
+          <ul className={`sidebar-nav group ${activePage === 'reports' && 'text-purple-700'}`} onClick={() => setActivePage('reports')}>
+            <ReceiptText className='sidebar-icon' />
+            <li className='sidebar-item'>Reports</li>
           </ul>
         </div>
 
         {/* Administrations*/}
         <div className='w-full mt-4'>
           <h1 className='sidebar-main'>Administrations</h1>
-          <ul className='sidebar-nav group'>
+          <ul className={`sidebar-nav group ${activePage === 'invoices' && 'text-purple-700'}`} onClick={() => setActivePage('invoices')}>
             <FaRegMoneyBill1 className='sidebar-icon' />
             <li className='sidebar-item'>Invoices</li>
           </ul>
-          <ul className='sidebar-nav group'>
+          <ul className={`sidebar-nav group ${activePage === 'users' && 'text-purple-700'}`} onClick={() => setActivePage('users')}>
             <GrUserSettings className='sidebar-icon' />
             <li className='sidebar-item'>Users</li>
           </ul>
@@ -166,7 +175,7 @@ const MiniSidebar = ({activePage, setActivePage }) => {
             <ChevronDown className={`sidebar-icon duration-200 ${isDropDownOpen === 'Administration' && 'rotate-180'}`} />
           </ul>
           <ul className={`duration-200 overflow-hidden ${isDropDownOpen === 'Administration' ? 'h-[50px]' : 'h-0'}`}>
-              <li className='sidebar-dropdown-item'><FaRegCircle className='size-2 mb-1' />User Roles</li>
+              <li className={`sidebar-dropdown-item ${activePage === 'user-roles' && 'text-purple-700'}`} onClick={() => setActivePage('user-roles')}><FaRegCircle className='size-2 mb-1' />User Roles</li>
           </ul>
         </div>
       </div>
