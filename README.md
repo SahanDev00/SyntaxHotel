@@ -1,4 +1,5 @@
 
+-- Schema creation
 CREATE SCHEMA [user];
 CREATE SCHEMA [cus];
 CREATE SCHEMA [room];
@@ -12,6 +13,9 @@ CREATE SCHEMA [tab];
 CREATE SCHEMA [sal];
 CREATE SCHEMA [note];
 CREATE SCHEMA [syst];
+CREATE SCHEMA [charts];
+
+-- table creation
 
 -- 🚀 Users Table (Admin, Staff, Customers)
 CREATE TABLE [user].users (
@@ -31,7 +35,6 @@ CREATE TABLE [user].roles (
     role_name VARCHAR(20) CHECK (role_name IN ('Admin', 'Manager', 'Receptionist', 'Staff')) NOT NULL,
     permissions NVARCHAR(MAX) -- JSON format for permissions
 );
-
 
 -- 🏨 Customer Categories Table
 CREATE TABLE [cus].customerCategory (
@@ -99,11 +102,14 @@ CREATE TABLE [boo].bookings (
     check_out_date DATE NOT NULL,
     booking_status VARCHAR(20) CHECK (booking_status IN ('Booked', 'Checked-in', 'Checked-out', 'Cancelled')) DEFAULT 'Booked',
     total_price DECIMAL(10,2),
+    paid_price DECIMAL(10,2),
+    staffID INT NOT NULL,
     paid_status VARCHAR(20) CHECK (paid_status IN ('Paid', 'Pending', 'Cancelled')) DEFAULT 'Pending',
     created_at DATETIME DEFAULT GETDATE(),
     FOREIGN KEY (customerID) REFERENCES [cus].customers(customerID) ON DELETE CASCADE,
     FOREIGN KEY (roomID) REFERENCES [room].rooms(roomID) ON DELETE CASCADE,
-    FOREIGN KEY (tableID) REFERENCES [tab].tables(tableID) ON DELETE CASCADE
+    FOREIGN KEY (tableID) REFERENCES [tab].tables(tableID) ON DELETE CASCADE,
+    FOREIGN KEY (staffID) REFERENCES [user].users(userID) ON DELETE CASCADE
 );
 
 -- 💳 Payments Table
@@ -124,15 +130,6 @@ CREATE TABLE [inv].invoices (
     total_amount DECIMAL(10,2) NOT NULL,
     invoice_date DATETIME DEFAULT GETDATE(),
     FOREIGN KEY (bookingID) REFERENCES [boo].bookings(bookingID) ON DELETE CASCADE
-);
-
--- 🏨 Room Status Table (Availability Tracker)
-CREATE TABLE [room].room_status (
-    roomStatusID INT IDENTITY(1,1) PRIMARY KEY,
-    roomID INT NOT NULL,
-    date DATE NOT NULL,
-    status VARCHAR(20) CHECK (status IN ('Available', 'Occupied', 'Maintenance')) DEFAULT 'Available',
-    FOREIGN KEY (roomID) REFERENCES [room].rooms(roomID) ON DELETE CASCADE
 );
 
 -- 🛏️ Housekeeping Table (Cleaning & Maintenance)
@@ -163,6 +160,7 @@ CREATE TABLE [st].staff (
     positionID INT NOT NULL,
     salary DECIMAL(10,2) NOT NULL,
     hired_date DATE NOT NULL,
+    created_date DATETIME DEFAULT GETDATE()
     status VARCHAR(20) CHECK (status IN ('Active', 'Innactive', 'Resigned')) DEFAULT 'Active',
     FOREIGN KEY (userID) REFERENCES [user].users(userID) ON DELETE CASCADE,
     FOREIGN KEY (positionID) REFERENCES [st].staff_positions(positionID)
@@ -183,9 +181,15 @@ CREATE TABLE [ser].service_orders (
     bookingID INT NOT NULL,
     serviceID INT NOT NULL,
     order_date DATETIME DEFAULT GETDATE(),
-    status VARCHAR(20) CHECK (status IN ('Requested', 'Completed')) DEFAULT 'Requested',
-    FOREIGN KEY (bookingID) REFERENCES [boo].bookings(bookingID) ON DELETE CASCADE,
-    FOREIGN KEY (serviceID) REFERENCES [ser].extra_services(serviceID) ON DELETE CASCADE
+    status VARCHAR(20) CHECK (status IN ('Requested', 'In-Progress' 'Completed', 'Cancelled')) DEFAULT 'Requested',
+    cancelled_reason VARCHAR(MAX),
+    total_price DECIMAL(10,2),
+    paid_price DECIMAL(10,2),
+    staffID INT NOT NULL,
+    paid_status VARCHAR(20) CHECK (paid_status IN ('Paid', 'Pending', 'Cancelled')) DEFAULT 'Pending',
+    FOREIGN KEY (bookingID) REFERENCES [boo].bookings(bookingID),
+    FOREIGN KEY (serviceID) REFERENCES [ser].extra_services(serviceID),
+    FOREIGN KEY (staffID) REFERENCES [user].users(userID)
 );
 
 -- 🛎️ inventory Table 
@@ -197,6 +201,16 @@ CREATE TABLE [inv].inventory (
     status VARCHAR(20) CHECK (status IN ('Available', 'Unavailable')) DEFAULT 'Available'
 );
 
+-- customer orders table
+CREATE TABLE [cus].customer_orders (
+    OrderID INT IDENTITY(1,1) PRIMARY KEY,
+    bookingID INT NOT NULL,
+    OrderedItems NVARCHAR(MAX), -- JSON format for permissions
+    paid_status VARCHAR(20) CHECK (status IN ('Paid', 'Not Paid', 'Cancelled')) DEFAULT 'Not Paid',
+    order_date DATETIME DEFAULT GETDATE()
+    FOREIGN KEY (bookingID) REFERENCES [boo].bookings(bookingID),
+)
+
 -- 🛎️ inventory Table 
 CREATE TABLE [note].hotel_notes (
     noteID INT IDENTITY(1,1) PRIMARY KEY,
@@ -205,11 +219,64 @@ CREATE TABLE [note].hotel_notes (
     FOREIGN KEY (userID) REFERENCES [user].users(userID)
 );
 
+-- Settings table
 CREATE TABLE [syst].Settings (
 	SettingID INT IDENTITY(1,1) PRIMARY KEY,
 	SettingName VARCHAR(MAX) NOT NULL,
 	SettingValue VARCHAR(MAX) NOT NULL
 )
 
-INSERT syst.Settings (SettingName, SettingValue) VALUES ('APIKey', '0661');
-INSERT syst.Settings (SettingName, SettingValue) VALUES ('Version', '0.01');
+-- monthly sales table
+CREATE TABLE [charts].monthly_sales (
+    SaleID INT IDENTITY(1,1) PRIMARY KEY,
+    month VARCHAR(20) NOT NULL,
+    sales INT NOT NULL,
+    created_at DATETIME DEFAULT GETDATE()
+);
+
+-- Customer Growth table
+CREATE TABLE [charts].customer_growth (
+    growthID INT IDENTITY(1,1) PRIMARY KEY,
+    month VARCHAR(20) NOT NULL,
+    newCustomers INT NOT NULL,
+    created_at DATETIME DEFAULT GETDATE()
+);
+
+-- Events table
+CREATE TABLE [charts].events (
+    eventID INT IDENTITY(1,1) PRIMARY KEY,
+    date DATE NOT NULL,
+    event VARCHAR(255) NOT NULL,
+    created_at DATETIME DEFAULT GETDATE()
+);
+
+
+-- table changes
+INSERT INTO syst.Settings (SettingName, SettingValue) VALUES ('APIKey', '0661');
+INSERT INTO syst.Settings (SettingName, SettingValue) VALUES ('Version', '0.01');
+
+INSERT INTO [charts].monthly_sales (month, sales) VALUES ('January', '0');
+INSERT INTO [charts].monthly_sales (month, sales) VALUES ('February', 0);
+INSERT INTO [charts].monthly_sales (month, sales) VALUES ('March', 0);
+INSERT INTO [charts].monthly_sales (month, sales) VALUES ('April', 0);
+INSERT INTO [charts].monthly_sales (month, sales) VALUES ('May', 0);
+INSERT INTO [charts].monthly_sales (month, sales) VALUES ('June', 0);
+INSERT INTO [charts].monthly_sales (month, sales) VALUES ('July', 0);
+INSERT INTO [charts].monthly_sales (month, sales) VALUES ('August', 0);
+INSERT INTO [charts].monthly_sales (month, sales) VALUES ('September', 0);
+INSERT INTO [charts].monthly_sales (month, sales) VALUES ('October', 0);
+INSERT INTO [charts].monthly_sales (month, sales) VALUES ('November', 0);
+INSERT INTO [charts].monthly_sales (month, sales) VALUES ('December', 0);
+
+INSERT INTO [charts].customer_growth (month, newCustomers) VALUES ('January', '0');
+INSERT INTO [charts].customer_growth (month, newCustomers) VALUES ('February', 0);
+INSERT INTO [charts].customer_growth (month, newCustomers) VALUES ('March', 0);
+INSERT INTO [charts].customer_growth (month, newCustomers) VALUES ('April', 0);
+INSERT INTO [charts].customer_growth (month, newCustomers) VALUES ('May', 0);
+INSERT INTO [charts].customer_growth (month, newCustomers) VALUES ('June', 0);
+INSERT INTO [charts].customer_growth (month, newCustomers) VALUES ('July', 0);
+INSERT INTO [charts].customer_growth (month, newCustomers) VALUES ('August', 0);
+INSERT INTO [charts].customer_growth (month, newCustomers) VALUES ('September', 0);
+INSERT INTO [charts].customer_growth (month, newCustomers) VALUES ('October', 0);
+INSERT INTO [charts].customer_growth (month, newCustomers) VALUES ('November', 0);
+INSERT INTO [charts].customer_growth (month, newCustomers) VALUES ('December', 0);
