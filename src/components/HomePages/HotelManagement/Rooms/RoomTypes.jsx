@@ -1,14 +1,29 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Pencil, Trash, Plus } from "lucide-react";
+import axios from 'axios'
 
 const RoomTypes = () => {
-  // Sample data (Replace with API data later)
-  const roomTypes = [
-    { id: 1, name: "Single", description: "One bed, suitable for one person", price: "$50" },
-    { id: 2, name: "Double", description: "Two beds, suitable for two people", price: "$80" },
-    { id: 3, name: "Suite", description: "Luxury suite with extra facilities", price: "$150" },
-    { id: 4, name: "Deluxe", description: "Spacious room with premium amenities", price: "$200" },
-  ];
+
+  const [roomTypes, setRoomTypes] = useState([]);
+  
+  useEffect(() => {
+    const fetchRoomTypes = async () => {
+      try {
+        const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/hotel/roomtypes`, {
+          headers: {
+            APIkey: process.env.REACT_APP_APIKey
+          }
+        });
+  
+        setRoomTypes(response.data); 
+
+      } catch (error) {
+        console.error("Error fetching data:", error);
+      }
+    };
+  
+    fetchRoomTypes();
+  }, [])
 
   return (
     <div className="p-6 bg-gray-100 min-h-screen font-overpass">
@@ -40,10 +55,10 @@ const RoomTypes = () => {
                   index % 2 === 0 ? "bg-gray-200" : "bg-gray-100"
                 }`}
               >
-                <td className="px-4 py-3">{type.id}</td>
-                <td className="px-4 py-3">{type.name}</td>
+                <td className="px-4 py-3">{type.roomTypeID}</td>
+                <td className="px-4 py-3">{type.type_name}</td>
                 <td className="px-4 py-3">{type.description}</td>
-                <td className="px-4 py-3 font-bold text-green-600">{type.price}</td>
+                <td className="px-4 py-3 font-bold text-green-600">RS. {type.price_per_night}</td>
                 <td className="px-4 py-3 flex justify-end gap-3">
                   <button className="text-blue-600 hover:text-blue-800">
                     <Pencil size={18} />

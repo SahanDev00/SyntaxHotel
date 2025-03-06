@@ -1,14 +1,29 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Pencil, Trash, Plus } from "lucide-react";
+import axios from "axios";
 
 const TableTypes = () => {
-  // Sample data (Replace with API data later)
-  const tableTypes = [
-    { id: 1, name: "Standard", description: "Basic table with seating for 4", price: "$10/hr" },
-    { id: 2, name: "VIP", description: "Premium table with extra space", price: "$20/hr" },
-    { id: 3, name: "Outdoor", description: "Open-air table with a great view", price: "$15/hr" },
-    { id: 4, name: "Private", description: "Private dining area for special occasions", price: "$30/hr" },
-  ];
+
+  const [tableTypes, setTableTypes] = useState([]);
+  
+  useEffect(() => {
+    const fetchTableTypes = async () => {
+      try {
+        const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/hotel/tabletypes`, {
+          headers: {
+            APIkey: process.env.REACT_APP_APIKey
+          }
+        });
+  
+        setTableTypes(response.data); 
+
+      } catch (error) {
+        console.error("Error fetching data:", error);
+      }
+    };
+  
+    fetchTableTypes();
+  }, [])
 
   return (
     <div className="p-6 bg-gray-100 min-h-screen font-overpass">
@@ -40,10 +55,10 @@ const TableTypes = () => {
                   index % 2 === 0 ? "bg-gray-200" : "bg-gray-100"
                 }`}
               >
-                <td className="px-4 py-3">{type.id}</td>
-                <td className="px-4 py-3">{type.name}</td>
+                <td className="px-4 py-3">{type.tableTypeID}</td>
+                <td className="px-4 py-3">{type.type_name}</td>
                 <td className="px-4 py-3">{type.description}</td>
-                <td className="px-4 py-3 font-bold text-green-600">{type.price}</td>
+                <td className="px-4 py-3 font-bold text-green-600">Rs. {type.price_per_hour}</td>
                 <td className="px-4 py-3 flex justify-end gap-3">
                   <button className="text-blue-600 hover:text-blue-800">
                     <Pencil size={18} />

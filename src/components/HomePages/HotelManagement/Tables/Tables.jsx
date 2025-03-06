@@ -1,14 +1,41 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Pencil, Trash, Plus } from "lucide-react";
+import axios from "axios";
 
 const Tables = () => {
-  // Sample room data (Replace with API data later)
-  const tables = [
-    { id: 1, number: "101", type: "Single", status: "Available" },
-    { id: 2, number: "102", type: "Double", status: "Occupied" },
-    { id: 3, number: "103", type: "Suite", status: "Maintenance" },
-    { id: 4, number: "104", type: "Deluxe", status: "Available" },
-  ];
+
+  const [tables, setTables] = useState([]);
+  const [tableType, setTableType] = useState([]);
+  
+  useEffect(() => {
+    const fetchTables = async () => {
+      try {
+        const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/hotel/tables`, {
+          headers: {
+            APIkey: process.env.REACT_APP_APIKey
+          }
+        });
+  
+        setTables(response.data); // Save rooms
+  
+        if (response.data.length > 0) { // Check if rooms exist
+          const tableTypeID = response.data[0].tableTypeID; // Get the first room's RoomTypeID
+  
+          const typeResponse = await axios.get(`${process.env.REACT_APP_BASE_URL}/hotel/tabletypes?TableTypeID=${tableTypeID}`, {
+            headers: {
+              APIkey: process.env.REACT_APP_APIKey
+            }
+          });
+  
+          setTableType(typeResponse.data);
+        }
+      } catch (error) {
+        console.error("Error fetching data:", error);
+      }
+    };
+  
+    fetchTables();
+  }, [])
 
   return (
     <div className="p-6 bg-gray-100 min-h-screen font-overpass">
@@ -40,9 +67,9 @@ const Tables = () => {
                   index % 2 === 0 ? "bg-gray-200" : "bg-gray-100"
                 }`}
               >
-                <td className="px-4 py-3">{table.id}</td>
-                <td className="px-4 py-3">{table.number}</td>
-                <td className="px-4 py-3">{table.type}</td>
+                <td className="px-4 py-3">{table.tableID}</td>
+                <td className="px-4 py-3">{table.table_number}</td>
+                <td className="px-4 py-3">{tableType.length > 0 ? tableType[0].type_name : "Unknown"}</td>
                 <td
                   className={`px-4 py-3 font-bold ${
                     table.status === "Available"

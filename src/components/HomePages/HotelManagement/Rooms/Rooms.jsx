@@ -1,14 +1,43 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Pencil, Trash, Plus } from "lucide-react";
+import axios from 'axios'
 
 const Rooms = () => {
-  // Sample room data (Replace with API data later)
-  const rooms = [
-    { id: 1, number: "101", type: "Single", status: "Available" },
-    { id: 2, number: "102", type: "Double", status: "Occupied" },
-    { id: 3, number: "103", type: "Suite", status: "Maintenance" },
-    { id: 4, number: "104", type: "Deluxe", status: "Available" },
-  ];
+ 
+  const [rooms, setRooms] = useState([]);
+  const [roomType, setRoomType] = useState([]);
+  
+  useEffect(() => {
+    const fetchRooms = async () => {
+      try {
+        const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/hotel/rooms`, {
+          headers: {
+            APIkey: process.env.REACT_APP_APIKey
+          }
+        });
+  
+        setRooms(response.data); // Save rooms
+  
+        if (response.data.length > 0) { // Check if rooms exist
+          const roomTypeID = response.data[0].roomTypeID; // Get the first room's RoomTypeID
+  
+          const typeResponse = await axios.get(`${process.env.REACT_APP_BASE_URL}/hotel/roomtypes?RoomTypeID=${roomTypeID}`, {
+            headers: {
+              APIkey: process.env.REACT_APP_APIKey
+            }
+          });
+  
+          setRoomType(typeResponse.data);
+
+        }
+      } catch (error) {
+        console.error("Error fetching data:", error);
+      }
+    };
+  
+    fetchRooms();
+  }, [])
+  
 
   return (
     <div className="p-6 bg-gray-100 min-h-screen font-overpass">
@@ -40,9 +69,9 @@ const Rooms = () => {
                   index % 2 === 0 ? "bg-gray-200" : "bg-gray-100"
                 }`}
               >
-                <td className="px-4 py-3">{room.id}</td>
-                <td className="px-4 py-3">{room.number}</td>
-                <td className="px-4 py-3">{room.type}</td>
+                <td className="px-4 py-3">{room.roomID}</td>
+                <td className="px-4 py-3">{room.room_number}</td>
+                <td className="px-4 py-3">{roomType.length > 0 ? roomType[0].type_name : "Unknown"}</td>
                 <td
                   className={`px-4 py-3 font-bold ${
                     room.status === "Available"

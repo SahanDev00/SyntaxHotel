@@ -1,47 +1,128 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer} from 'recharts'
 import { FiBell } from 'react-icons/fi'
+import axios from 'axios'
 
 const Dashboard = () => {
-  // Dummy Data for Revenue Chart
-  const salesData = [
-    { month: 'Jan', sales: 4000 },
-    { month: 'Feb', sales: 3200 },
-    { month: 'Mar', sales: 4500 },
-    { month: 'Apr', sales: 5000 },
-    { month: 'May', sales: 4800 },
-    { month: 'Jun', sales: 6000 },
-    { month: 'Jul', sales: 5200 },
-    { month: 'Aug', sales: 5800 },
-    { month: 'Sep', sales: 6200 },
-    { month: 'Oct', sales: 6800 },
-    { month: 'Nov', sales: 7000 },
-    { month: 'Dec', sales: 7500 }
-  ]
 
+  const [newCustomersCount, setNewCustomersCount] = useState('');
+  const [newOrdersCount, setNewOrdersCount] = useState('');
+  const [availableRoomsCount, setAvailableRoomsCount] = useState('');
+  const [availableTablesCount, setAvailableTablesCount] = useState('');
+  const [pendingPaymentsCount, setPendingPaymentsCount] = useState('');
+  const [monthlySales, setMonthlySales] = useState([]);
+  const [customerGrowth, setCustomerGrowth] = useState([]);
+  const [upcomingEvents, setUpcomingEvents] = useState([]);
+  const [upcomingReservations, setUpcomingReservations] = useState([]);
 
-  // Dummy Data for Stats
-  const stats = [
-    { title: 'New Customers', count: 128, color: 'bg-yellow-50' },
-    { title: 'New Orders', count: 76, color: 'bg-orange-50' },
-    { title: 'Available Rooms', count: 18, color: 'bg-purple-50' },
-    { title: 'Available Tables', count: 22, color: 'bg-red-50' },
-    { title: 'Pending Invoices', count: 10, color: 'bg-red-100' }
-  ]
+  useEffect(() => {
+    const fetchNewCustomers = async () => {
+      const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/customers/count`, {
+        headers: {
+          APIkey: process.env.REACT_APP_APIKey
+        }
+      })
+      setNewCustomersCount(response.data[0].Count)
+    }
+    fetchNewCustomers();
+  }, [])
 
-  // Dummy Data for Upcoming Events
-  const upcomingEvents = [
-    { date: '2025-03-10', event: 'Annual Business Meeting' },
-    { date: '2025-03-15', event: 'VIP Customer Event' },
-    { date: '2025-03-20', event: 'Staff Training Workshop' }
-  ]
+  useEffect(() => {
+    const fetchNewOrders = async () => {
+      const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/services/count`, {
+        headers: {
+          APIkey: process.env.REACT_APP_APIKey
+        }
+      })
+      setNewOrdersCount(response.data[0].Count)
+    }
+    fetchNewOrders();
+  }, [])
 
-  // Dummy Data for Upcoming Reservations
-  const reservations = [
-    { name: 'John Doe', table: 3, time: '2025-03-12 7:00 PM' },
-    { name: 'Jane Smith', table: 5, time: '2025-03-14 6:30 PM' },
-    { name: 'Bill Gates', table: 1, time: '2025-03-16 8:00 PM' }
-  ]
+  useEffect(() => {
+    const fetchAvailableRooms = async () => {
+      const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/hotel/availablerooms`, {
+        headers: {
+          APIkey: process.env.REACT_APP_APIKey
+        }
+      })
+      setAvailableRoomsCount(response.data[0].Count)
+    }
+    fetchAvailableRooms();
+  }, [])
+
+  useEffect(() => {
+    const fetchAvailableTables = async () => {
+      const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/hotel/availabletables`, {
+        headers: {
+          APIkey: process.env.REACT_APP_APIKey
+        }
+      })
+      setAvailableTablesCount(response.data[0].Count)
+    }
+    fetchAvailableTables();
+  }, [])
+  
+  useEffect(() => {
+    const fetchPendingPayments = async () => {
+      const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/booking/pendingcounts`, {
+        headers: {
+          APIkey: process.env.REACT_APP_APIKey
+        }
+      })
+      setPendingPaymentsCount(response.data[0].Count)
+    }
+    fetchPendingPayments();
+  }, [])
+
+  useEffect(() => {
+    const fetchMonthlySales = async () => {
+      const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/charts/monthlysales`, {
+        headers: {
+          APIkey: process.env.REACT_APP_APIKey
+        }
+      })
+      setMonthlySales(response.data)
+    }
+    fetchMonthlySales();
+  }, []) 
+
+  useEffect(() => {
+    const fetchCustomerGrowth = async () => {
+      const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/charts/customergrowth`, {
+        headers: {
+          APIkey: process.env.REACT_APP_APIKey
+        }
+      })
+      setCustomerGrowth(response.data)
+    }
+    fetchCustomerGrowth();
+  }, [])
+
+  useEffect(() => {
+    const fetchUpcomingEvents = async () => {
+      const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/charts/upcommingevents`, {
+        headers: {
+          APIkey: process.env.REACT_APP_APIKey
+        }
+      })
+      setUpcomingEvents(response.data)
+    }
+    fetchUpcomingEvents();
+  }, [])
+
+  useEffect(() => {
+    const fetchUpcomingReservations = async () => {
+      const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/booking/upcomingreservations`, {
+        headers: {
+          APIkey: process.env.REACT_APP_APIKey
+        }
+      })
+      setUpcomingReservations(response.data)
+    }
+    fetchUpcomingReservations();
+  }, [])
+
 
   // Dummy Data for Notifications
   const notifications = [
@@ -49,23 +130,6 @@ const Dashboard = () => {
     { type: 'Room Service', message: 'Room 203 requested extra towels', date: '2025-03-06' },
     { type: 'Maintenance Request', message: 'AC malfunction in Room 305', date: '2025-03-05' }
   ]
-
-  // Dummy Data for Customer Growth
-  const customerGrowthData = [
-    { month: 'Jan', newCustomers: 150 },
-    { month: 'Feb', newCustomers: 120 },
-    { month: 'Mar', newCustomers: 170 },
-    { month: 'Apr', newCustomers: 200 },
-    { month: 'May', newCustomers: 180 },
-    { month: 'Jun', newCustomers: 220 },
-    { month: 'Jul', newCustomers: 250 },
-    { month: 'Aug', newCustomers: 230 },
-    { month: 'Sep', newCustomers: 260 },
-    { month: 'Oct', newCustomers: 280 },
-    { month: 'Nov', newCustomers: 310 },
-    { month: 'Dec', newCustomers: 330 }
-  ];
-
 
   // Notification State
   const [showNotifications, setShowNotifications] = useState(false)
@@ -106,19 +170,33 @@ const Dashboard = () => {
 
       {/* Stats Cards */}
       <div className='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6'>
-        {stats.map((stat, index) => (
-          <div key={index} className={`p-6 ${stat.color} text-gray-700 rounded shadow`}>
-            <h2 className='font-semibold text-gray-800'>{stat.title}</h2>
-            <p className='text-3xl font-bold text-gray-900'>{stat.count}</p>
+          <div className={`p-6 bg-yellow-50 rounded shadow`}>
+            <h2 className='font-semibold text-gray-900'>New Customers</h2>
+            <p className='text-3xl font-bold text-gray-700'>{newCustomersCount}</p>
           </div>
-        ))}
+          <div className={`p-6 bg-orange-50 rounded shadow`}>
+            <h2 className='font-semibold text-gray-900'>New Orders</h2>
+            <p className='text-3xl font-bold text-gray-700'>{newOrdersCount}</p>
+          </div>
+          <div className={`p-6 bg-purple-50 rounded shadow`}>
+            <h2 className='font-semibold text-gray-900'>Available Rooms</h2>
+            <p className='text-3xl font-bold text-gray-700'>{availableRoomsCount}</p>
+          </div>
+          <div className={`p-6 bg-red-50 rounded shadow`}>
+            <h2 className='font-semibold text-gray-900'>Available Tables</h2>
+            <p className='text-3xl font-bold text-gray-700'>{availableTablesCount}</p>
+          </div>
+          <div className={`p-6 bg-red-100 rounded shadow`}>
+            <h2 className='font-semibold text-gray-900'>Pending Payments</h2>
+            <p className='text-3xl font-bold text-gray-700'>{pendingPaymentsCount}</p>
+          </div>
       </div>
 
       {/* Revenue Chart */}
       <div className='bg-white p-6 mt-8 rounded shadow'>
         <h2 className='text-xl font-semibold mb-4'>Monthly Sales Overview</h2>
         <ResponsiveContainer width="100%" height={300}>
-          <LineChart data={salesData}>
+          <LineChart data={monthlySales}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis tick={{ fontSize: 12 }} dataKey="month" />
             <YAxis tick={{ fontSize: 12 }} />
@@ -134,7 +212,7 @@ const Dashboard = () => {
         <div className='bg-white p-6 rounded shadow'>
           <h2 className='text-xl font-semibold mb-4'>Customer Growth Overview</h2>
           <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={customerGrowthData}>
+            <LineChart data={customerGrowth}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis tick={{ fontSize: 12 }} dataKey="month" />
               <YAxis tick={{ fontSize: 12 }} />
@@ -148,11 +226,15 @@ const Dashboard = () => {
         <div className='bg-white p-6 rounded shadow'>
           <h2 className='text-xl font-semibold mb-4'>Upcoming Events</h2>
           <ul className='space-y-2'>
-            {upcomingEvents.map((event, index) => (
-              <li key={index} className='p-3 bg-purple-100 rounded-md'>
-                <span className='font-semibold'>{event.date}:</span> {event.event}
-              </li>
-            ))}
+            {upcomingEvents.length !== 0 ? (
+              upcomingEvents.map((event, index) => (
+                <li key={index} className='p-3 bg-purple-100 rounded-md'>
+                  <span className='font-semibold'>{event.date}:</span> {event.event}
+                </li>
+              ))
+            ) : (
+              <p className='text-sm text-gray-500'>No Upcoming Events</p>
+            )}
           </ul>
         </div>
       </div>
@@ -161,11 +243,20 @@ const Dashboard = () => {
       <div className='bg-white p-6 mt-8 rounded shadow'>
         <h2 className='text-xl font-semibold mb-4'>Upcoming Reservations</h2>
         <ul className='space-y-2'>
-          {reservations.map((reservation, index) => (
-            <li key={index} className='p-3 bg-gray-100 rounded-md'>
-              <span className='font-semibold'>{reservation.name}</span> - Table {reservation.table} at {reservation.time}
-            </li>
-          ))}
+          {upcomingReservations.length !== 0 ? (
+            upcomingReservations.map((reservation, index) => (
+              <li key={index} className='p-3 bg-gray-100 rounded-md'>
+                {reservation.room_number === null && (
+                  <li><span className='font-semibold'>{reservation.full_name}</span> - Table {reservation.table_number} at {reservation.check_in_date}</li>
+                )}
+                {reservation.table_number === null && (
+                  <li><span className='font-semibold'>{reservation.full_name}</span> - Room {reservation.room_number} at {reservation.check_in_date}</li>
+                )} 
+              </li>
+            ))
+          ) : (
+            <p className='text-sm text-gray-500'>No Upcoming Reservations</p>
+          )}
         </ul>
       </div>
     </div>
