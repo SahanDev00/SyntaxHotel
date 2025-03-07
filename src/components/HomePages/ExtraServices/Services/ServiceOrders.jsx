@@ -1,43 +1,44 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Pencil, CheckCircle, XCircle, Plus } from "lucide-react";
+import axios from "axios";
 
 const ServiceOrders = () => {
-  // Sample service orders data (Replace this with API data later)
-  const serviceOrdersData = [
-    {
-      serviceOrderID: 1,
-      bookingID: 101,
-      customerName: "Alice",
-      serviceName: "Spa",
-      orderDate: "2024-02-27",
-      status: "Requested",
-    },
-    {
-      serviceOrderID: 2,
-      bookingID: 102,
-      customerName: "Bob",
-      serviceName: "Laundry",
-      orderDate: "2024-02-28",
-      status: "Completed",
-    },
-    {
-      serviceOrderID: 3,
-      bookingID: 103,
-      customerName: "Charlie",
-      serviceName: "Room Service",
-      orderDate: "2024-02-26",
-      status: "Requested",
-    },
-    {
-      serviceOrderID: 3,
-      bookingID: 103,
-      customerName: "Charlie",
-      serviceName: "Room Service",
-      orderDate: "2024-02-26",
-      status: "Cancelled",
-    },
-    // Add more service orders as needed
-  ];
+
+  const [serviceOrder, setServiceOrder] = useState([]);
+  const [customerID, setCustomerID] = useState([]);
+  const [customer, setCustomer] = useState([]);
+
+  useEffect(() => {
+    const fetchServiceOrders = async () => {
+      try {
+        const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/services/orders`, {
+          headers: {
+            APIkey: process.env.REACT_APP_APIKey
+          }
+        })
+        setServiceOrder(response.data)
+
+        if (response.data.length > 0) { 
+          const bookingID = response.data[0].bookingID; 
+          const Response = await axios.get(`${process.env.REACT_APP_BASE_URL}/booking/bookings?bookingID=${bookingID}`, {
+            headers: {
+              APIkey: process.env.REACT_APP_APIKey
+            }
+          });
+          setCustomerID(Response.data[0].customerID);
+          const CustomerResponse = await axios.get(`${process.env.REACT_APP_BASE_URL}/customers/customers?customerID=${customerID}`, {
+            headers: {
+              APIkey: process.env.REACT_APP_APIKey
+            }
+          });
+          setCustomer(CustomerResponse.data);
+        }
+      } catch (err) {
+        console.log(err)
+      }
+    }
+    fetchServiceOrders();
+  }, [customerID])
 
   return (
     <div className="p-6 bg-gray-100 min-h-screen font-overpass">
@@ -63,7 +64,7 @@ const ServiceOrders = () => {
             </tr>
           </thead>
           <tbody>
-            {serviceOrdersData.map((order, index) => (
+            {serviceOrder.map((order, index) => (
               <tr
                 key={order.serviceOrderID}
                 className={`text-gray-800 text-sm font-medium ${
@@ -71,9 +72,9 @@ const ServiceOrders = () => {
                 }`}
               >
                 <td className="px-4 py-3">{order.serviceOrderID}</td>
-                <td className="px-4 py-3">{order.customerName}</td>
-                <td className="px-4 py-3">{order.serviceName}</td>
-                <td className="px-4 py-3">{order.orderDate}</td>
+                <td className="px-4 py-3">{customer.length > 0 ? customer[0].full_name : "Unknown"}</td>
+                <td className="px-4 py-3">{order.serviceID}</td>
+                <td className="px-4 py-3">{new Date(order.order_date).toLocaleString()}</td>
                 <td className="px-4 py-3">
                   <span
                     className={`${order.status === "Requested" && "text-yellow-500"} ${order.status === "Cancelled" && "text-red-500"} ${order.status === "Completed" && "text-green-500"} font-semibold`}

@@ -1,23 +1,27 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
+import axios from "axios";
 
 const StaffPositions = () => {
-  // Sample staff positions data (Replace this with API data later)
-  const positionsData = [
-    {
-      positionID: 1,
-      positionName: "Manager",
-    },
-    {
-      positionID: 2,
-      positionName: "Waiter",
-    },
-    {
-      positionID: 3,
-      positionName: "Housekeeper",
-    },
-    // Add more positions as needed
-  ];
+
+  const [position, setPosition] = useState([]);
+
+  useEffect(() => {
+    const fetchPositions = async () => {
+      try {
+        const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/staff/positions`, {
+          headers: {
+            APIkey: process.env.REACT_APP_APIKey
+          }
+        })
+        setPosition(response.data)
+
+      } catch (err) {
+        console.log(err)
+      }
+    }
+    fetchPositions();
+  }, [])
 
   return (
     <div className="p-6 bg-gray-100 min-h-screen font-overpass">
@@ -40,7 +44,7 @@ const StaffPositions = () => {
             </tr>
           </thead>
           <tbody>
-            {positionsData.map((position, index) => (
+            {position.map((position, index) => (
               <tr
                 key={position.positionID}
                 className={`text-gray-800 text-sm font-medium ${
@@ -48,7 +52,7 @@ const StaffPositions = () => {
                 }`}
               >
                 <td className="px-4 py-3">{position.positionID}</td>
-                <td className="px-4 py-3">{position.positionName}</td>
+                <td className="px-4 py-3">{position.position_name}</td>
                 <td className="px-4 py-3 flex justify-end gap-3">
                   <button className="text-blue-600 hover:text-blue-800">
                     <Pencil size={18} />

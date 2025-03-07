@@ -17,108 +17,144 @@ const Dashboard = () => {
 
   useEffect(() => {
     const fetchNewCustomers = async () => {
-      const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/customers/count`, {
-        headers: {
-          APIkey: process.env.REACT_APP_APIKey
-        }
-      })
-      setNewCustomersCount(response.data[0].Count)
+      try {
+        const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/customers/count`, {
+          headers: {
+            APIkey: process.env.REACT_APP_APIKey
+          }
+        })
+        setNewCustomersCount(response.data[0].Count)
+      } catch (err) {
+        console.log(err)
+      }
     }
     fetchNewCustomers();
   }, [])
 
   useEffect(() => {
     const fetchNewOrders = async () => {
-      const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/services/count`, {
-        headers: {
-          APIkey: process.env.REACT_APP_APIKey
-        }
-      })
-      setNewOrdersCount(response.data[0].Count)
+      try {
+        const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/services/count`, {
+          headers: {
+            APIkey: process.env.REACT_APP_APIKey
+          }
+        })
+        setNewOrdersCount(response.data[0].Count)
+      } catch (err) {
+        console.log(err)
+      }
     }
     fetchNewOrders();
   }, [])
 
   useEffect(() => {
     const fetchAvailableRooms = async () => {
-      const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/hotel/availablerooms`, {
-        headers: {
-          APIkey: process.env.REACT_APP_APIKey
-        }
-      })
-      setAvailableRoomsCount(response.data[0].Count)
+      try {
+        const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/hotel/availablerooms`, {
+          headers: {
+            APIkey: process.env.REACT_APP_APIKey
+          }
+        })
+        setAvailableRoomsCount(response.data[0].Count)
+      } catch (err) {
+        console.log(err)
+      }
     }
     fetchAvailableRooms();
   }, [])
 
   useEffect(() => {
     const fetchAvailableTables = async () => {
-      const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/hotel/availabletables`, {
-        headers: {
-          APIkey: process.env.REACT_APP_APIKey
-        }
-      })
-      setAvailableTablesCount(response.data[0].Count)
+      try {
+        const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/hotel/availabletables`, {
+          headers: {
+            APIkey: process.env.REACT_APP_APIKey
+          }
+        })
+        setAvailableTablesCount(response.data[0].Count)
+      } catch (err) {
+        console.log(err)
+      }
     }
     fetchAvailableTables();
   }, [])
   
   useEffect(() => {
     const fetchPendingPayments = async () => {
-      const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/booking/pendingcounts`, {
-        headers: {
-          APIkey: process.env.REACT_APP_APIKey
-        }
-      })
-      setPendingPaymentsCount(response.data[0].Count)
+      try {
+        const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/booking/pendingcounts`, {
+          headers: {
+            APIkey: process.env.REACT_APP_APIKey
+          }
+        })
+        setPendingPaymentsCount(response.data[0].Count)
+      } catch (err) {
+        console.log(err)
+      }
     }
     fetchPendingPayments();
   }, [])
 
   useEffect(() => {
     const fetchMonthlySales = async () => {
-      const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/charts/monthlysales`, {
-        headers: {
-          APIkey: process.env.REACT_APP_APIKey
-        }
-      })
-      setMonthlySales(response.data)
+      try {
+        const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/charts/monthlysales`, {
+          headers: {
+            APIkey: process.env.REACT_APP_APIKey
+          }
+        })
+        setMonthlySales(response.data)
+      } catch (err) {
+        console.log(err)
+      }
     }
     fetchMonthlySales();
   }, []) 
 
   useEffect(() => {
     const fetchCustomerGrowth = async () => {
-      const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/charts/customergrowth`, {
-        headers: {
-          APIkey: process.env.REACT_APP_APIKey
-        }
-      })
-      setCustomerGrowth(response.data)
+      try {
+        const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/charts/customergrowth`, {
+          headers: {
+            APIkey: process.env.REACT_APP_APIKey
+          }
+        })
+        setCustomerGrowth(response.data)
+      } catch (err) {
+        console.log(err)
+      }
     }
     fetchCustomerGrowth();
   }, [])
 
   useEffect(() => {
     const fetchUpcomingEvents = async () => {
-      const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/charts/upcommingevents`, {
-        headers: {
-          APIkey: process.env.REACT_APP_APIKey
-        }
-      })
-      setUpcomingEvents(response.data)
+      try {
+        const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/charts/upcommingevents`, {
+          headers: {
+            APIkey: process.env.REACT_APP_APIKey
+          }
+        })
+        setUpcomingEvents(response.data)
+      } catch (err) {
+        console.log(err)
+      }
     }
     fetchUpcomingEvents();
   }, [])
 
   useEffect(() => {
     const fetchUpcomingReservations = async () => {
-      const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/booking/upcomingreservations`, {
-        headers: {
-          APIkey: process.env.REACT_APP_APIKey
-        }
-      })
-      setUpcomingReservations(response.data)
+      try {
+        const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/booking/upcomingreservations`, {
+          headers: {
+            APIkey: process.env.REACT_APP_APIKey
+          }
+        })
+        setUpcomingReservations(response.data)
+      } catch (err) {
+        console.log(err)
+      }
     }
     fetchUpcomingReservations();
   }, [])
@@ -247,10 +283,10 @@ const Dashboard = () => {
             upcomingReservations.map((reservation, index) => (
               <li key={index} className='p-3 bg-gray-100 rounded-md'>
                 {reservation.room_number === null && (
-                  <li><span className='font-semibold'>{reservation.full_name}</span> - Table {reservation.table_number} at {reservation.check_in_date}</li>
+                  <li><span className='font-semibold'>{reservation.full_name}</span> - Table {reservation.table_number} at {new Date(reservation.check_in_date).toLocaleString()}</li>
                 )}
                 {reservation.table_number === null && (
-                  <li><span className='font-semibold'>{reservation.full_name}</span> - Room {reservation.room_number} at {reservation.check_in_date}</li>
+                  <li><span className='font-semibold'>{reservation.full_name}</span> - Room {reservation.room_number} at {new Date(reservation.check_in_date).toLocaleString()}</li>
                 )} 
               </li>
             ))

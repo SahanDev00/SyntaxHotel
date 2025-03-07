@@ -1,29 +1,27 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
+import axios from 'axios'
 
 const Services = () => {
-  // Sample services data (Replace this with API data later)
-  const servicesData = [
-    {
-      serviceID: 1,
-      serviceName: "Spa",
-      description: "Relaxing spa services to rejuvenate your mind and body.",
-      price: "$150",
-    },
-    {
-      serviceID: 2,
-      serviceName: "Laundry",
-      description: "Clothing laundry services including dry cleaning.",
-      price: "$25",
-    },
-    {
-      serviceID: 3,
-      serviceName: "Room Service",
-      description: "Food and beverage delivery directly to your room.",
-      price: "$30",
-    },
-    // Add more services as needed
-  ];
+
+  const [services, setServices] = useState([]);
+
+  useEffect(() => {
+    const fetchServices = async () => {
+      try {
+        const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/services/services`, {
+          headers: {
+            APIkey: process.env.REACT_APP_APIKey
+          }
+        })
+        setServices(response.data)
+
+      } catch (err) {
+        console.log(err)
+      }
+    }
+    fetchServices();
+  }, [])
 
   return (
     <div className="p-6 bg-gray-100 min-h-screen font-overpass">
@@ -48,7 +46,7 @@ const Services = () => {
             </tr>
           </thead>
           <tbody>
-            {servicesData.map((service, index) => (
+            {services.map((service, index) => (
               <tr
                 key={service.serviceID}
                 className={`text-gray-800 text-sm font-medium ${
@@ -56,7 +54,7 @@ const Services = () => {
                 }`}
               >
                 <td className="px-4 py-3">{service.serviceID}</td>
-                <td className="px-4 py-3">{service.serviceName}</td>
+                <td className="px-4 py-3">{service.service_name}</td>
                 <td className="px-4 py-3">{service.description}</td>
                 <td className="px-4 py-3">{service.price}</td>
                 <td className="px-4 py-3 flex justify-end gap-3">

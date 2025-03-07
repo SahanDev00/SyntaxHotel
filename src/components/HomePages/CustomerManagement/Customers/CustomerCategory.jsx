@@ -1,28 +1,26 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Pencil, Trash, Plus } from "lucide-react";
+import axios from "axios";
 
 const CustomerCategory = () => {
-  // Sample category data (Replace this with API data later)
-  const categories = [
-    {
-      id: 1,
-      categoryName: "VIP",
-      additionalFeeRate: "10%",
-      additionalFeeAmount: "$50",
-    },
-    {
-      id: 2,
-      categoryName: "Regular",
-      additionalFeeRate: "5%",
-      additionalFeeAmount: "$20",
-    },
-    {
-      id: 3,
-      categoryName: "Guest",
-      additionalFeeRate: "0%",
-      additionalFeeAmount: "$0",
-    },
-  ];
+
+  const [customerCategories, setCustomerCategories] = useState([]);
+
+  useEffect(() => {
+    const fetchCustomerCategories = async () => {
+      try {
+        const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/customers/category`, {
+          headers: {
+            APIkey: process.env.REACT_APP_APIKey
+          }
+        })
+        setCustomerCategories(response.data)
+      } catch (err) {
+        console.log(err)
+      }
+    }
+    fetchCustomerCategories();
+  }, [])
 
   return (
     <div className="p-6 bg-gray-100 min-h-screen font-overpass">
@@ -47,15 +45,15 @@ const CustomerCategory = () => {
             </tr>
           </thead>
           <tbody>
-            {categories.map((category, index) => (
+            {customerCategories.map((category, index) => (
               <tr
                 key={category.id}
                 className={`text-gray-800 text-sm font-medium ${
                   index % 2 === 0 ? "bg-gray-200" : "bg-gray-100"
                 }`}
               >
-                <td className="px-4 py-3">{category.id}</td>
-                <td className="px-4 py-3">{category.categoryName}</td>
+                <td className="px-4 py-3">{category.categoryID}</td>
+                <td className="px-4 py-3">{category.category_name}</td>
                 <td className="px-4 py-3">{category.additionalFeeRate}</td>
                 <td className="px-4 py-3">{category.additionalFeeAmount}</td>
                 <td className="px-4 py-3 flex justify-end gap-3">

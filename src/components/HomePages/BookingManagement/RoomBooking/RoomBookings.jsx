@@ -1,62 +1,26 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Pencil, Plus } from "lucide-react";
+import axios from 'axios'
 
 const RoomBookings = () => {
-  // Sample room booking data (Replace this with API data later)
-  const bookings = [
-    {
-      bookingID: 1,
-      customerID: 101,
-      roomID: 201,
-      tableID: 301,
-      customerName: "John Doe",
-      roomNumber: 101,
-      checkIn: "2024-02-20",
-      checkOut: "2024-02-25",
-      bookingStatus: "Booked",
-      totalPrice: "$500",
-      createdAt: "2024-02-15",
-    },
-    {
-      bookingID: 2,
-      customerID: 102,
-      roomID: 202,
-      tableID: null,
-      customerName: "Jane Smith",
-      roomNumber: 102,
-      checkIn: "2024-01-10",
-      checkOut: "2024-01-15",
-      bookingStatus: "Cancelled",
-      totalPrice: "$350",
-      createdAt: "2024-01-05",
-    },
-    {
-      bookingID: 3,
-      customerID: 103,
-      roomID: 203,
-      tableID: null,
-      customerName: "Mike Johnson",
-      roomNumber: 103,
-      checkIn: "2024-03-01",
-      checkOut: "2024-03-05",
-      bookingStatus: "Checked-in",
-      totalPrice: "$450",
-      createdAt: "2024-02-28",
-    },
-    {
-      bookingID: 4,
-      customerID: 106,
-      roomID: 203,
-      tableID: null,
-      customerName: "Jonathan",
-      roomNumber: 108,
-      checkIn: "2024-03-01",
-      checkOut: "2024-03-05",
-      bookingStatus: "Checked-out",
-      totalPrice: "$450",
-      createdAt: "2024-02-28",
-    },
-  ];
+
+  const [bookings, setBookings] = useState([]);
+
+  useEffect(() => {
+    const fetchCustomers = async () => {
+      try {
+        const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/booking/roombookings`, {
+          headers: {
+            APIkey: process.env.REACT_APP_APIKey
+          }
+        })
+        setBookings(response.data)
+      } catch (err) {
+        console.log(err)
+      }
+    }
+    fetchCustomers();
+  }, [])
 
   return (
     <div className="p-6 bg-gray-100 min-h-screen font-overpass">
@@ -81,6 +45,7 @@ const RoomBookings = () => {
               <th className="px-4 py-3 font-semibold">Status</th>
               <th className="px-4 py-3 font-semibold">Total Price</th>
               <th className="px-4 py-3 font-semibold">Created At</th>
+              <th className="px-4 py-3 font-semibold">Staff</th>
               <th className="px-4 py-3 text-right font-semibold">Actions</th>
             </tr>
           </thead>
@@ -93,25 +58,26 @@ const RoomBookings = () => {
                 }`}
               >
                 <td className="px-4 py-3">{booking.bookingID}</td>
-                <td className="px-4 py-3">{booking.customerName}</td>
-                <td className="px-4 py-3">{booking.roomNumber}</td>
-                <td className="px-4 py-3">{booking.checkIn}</td>
-                <td className="px-4 py-3">{booking.checkOut}</td>
+                <td className="px-4 py-3">{booking.full_name}</td>
+                <td className="px-4 py-3">{booking.room_number}</td>
+                <td className="px-4 py-3">{new Date(booking.check_in_date).toLocaleString()}</td>
+                <td className="px-4 py-3">{new Date(booking.check_out_date).toLocaleString()}</td>
                 <td
                   className={`px-4 py-3 font-bold ${
-                    booking.bookingStatus === "Booked"
+                    booking.booking_status === "Booked"
                       ? "text-blue-600"
-                      : booking.bookingStatus === "Checked-in"
+                      : booking.booking_status === "Checked-in"
                       ? "text-green-600"
-                      : booking.bookingStatus === "Checked-out"
+                      : booking.booking_status === "Checked-out"
                       ? "text-yellow-500"
                       : "text-red-600"
                   }`}
                 >
-                  {booking.bookingStatus}
+                  {booking.booking_status}
                 </td>
-                <td className="px-4 py-3">{booking.totalPrice}</td>
-                <td className="px-4 py-3">{booking.createdAt}</td>
+                <td className="px-4 py-3">{booking.total_price}</td>
+                <td className="px-4 py-3">{new Date(booking.created_at).toLocaleString()}</td>
+                <td className="px-4 py-3">{booking.fullName}</td>
                 <td className="px-4 py-3 flex justify-end gap-3">
                   <button className="text-blue-600 hover:text-blue-800">
                     <Pencil size={18} />

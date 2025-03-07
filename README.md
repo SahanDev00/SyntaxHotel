@@ -20,13 +20,16 @@ CREATE SCHEMA [charts];
 -- 🚀 Users Table (Admin, Staff, Customers)
 CREATE TABLE [user].users (
     userID INT IDENTITY(1,1) PRIMARY KEY,
+    staffID INT UNIQUE NOT NULL,
     username VARCHAR(50) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
-    role VARCHAR(20) CHECK (role IN ('Admin', 'Manager', 'Receptionist', 'Staff', 'Customer')) NOT NULL,
+    roleID INT NOT NULL,
     email VARCHAR(100) UNIQUE,
     phone VARCHAR(15),
     status VARCHAR(20) CHECK (status IN ('Active', 'Innactive')) DEFAULT 'Active',
-    created_at DATETIME DEFAULT GETDATE()
+    created_at DATETIME DEFAULT GETDATE(),
+    FOREIGN KEY (staffID) REFERENCES [user].users(userID),
+    FOREIGN KEY (roleID) REFERENCES [user].roles(roleID),
 );
 
 -- 🎭 Roles Table (Role-Based Access Control)
@@ -47,7 +50,7 @@ CREATE TABLE [cus].customerCategory (
 -- 🏨 Customers Table
 CREATE TABLE [cus].customers (
     CustomerID INT IDENTITY(1,1) PRIMARY KEY,
-    customer_categoryID INT UNIQUE,
+    customer_categoryID INT NOT NULL,
     full_name VARCHAR(100) NOT NULL,
     phone VARCHAR(15),
     email VARCHAR(100) UNIQUE,
@@ -109,7 +112,7 @@ CREATE TABLE [boo].bookings (
     FOREIGN KEY (customerID) REFERENCES [cus].customers(customerID) ON DELETE CASCADE,
     FOREIGN KEY (roomID) REFERENCES [room].rooms(roomID) ON DELETE CASCADE,
     FOREIGN KEY (tableID) REFERENCES [tab].tables(tableID) ON DELETE CASCADE,
-    FOREIGN KEY (staffID) REFERENCES [user].users(userID) ON DELETE CASCADE
+    FOREIGN KEY (staffID) REFERENCES [st].staff(staffID) ON DELETE CASCADE
 );
 
 -- 💳 Payments Table
@@ -152,7 +155,6 @@ CREATE TABLE [st].staff_positions (
 -- 🏢 Staff Table
 CREATE TABLE [st].staff (
     staffID INT IDENTITY(1,1) PRIMARY KEY,
-    userID INT UNIQUE,
     firstName VARCHAR(50) NOT NULL,
     lastName VARCHAR(50) NOT NULL,
     NIC VARCHAR(50) NOT NULL,
@@ -162,7 +164,6 @@ CREATE TABLE [st].staff (
     hired_date DATE NOT NULL,
     created_date DATETIME DEFAULT GETDATE()
     status VARCHAR(20) CHECK (status IN ('Active', 'Innactive', 'Resigned')) DEFAULT 'Active',
-    FOREIGN KEY (userID) REFERENCES [user].users(userID) ON DELETE CASCADE,
     FOREIGN KEY (positionID) REFERENCES [st].staff_positions(positionID)
 );
 

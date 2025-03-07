@@ -1,47 +1,37 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Pencil, Plus} from "lucide-react";
+import axios from 'axios'
 
 const Staff = () => {
-  // Sample staff data (Replace this with API data later)
-  const staffData = [
-    {
-      staffID: 1,
-      userID: 101,
-      firstName: "John",
-      lastName: "Doe",
-      NIC: "123456789V",
-      mobileNumber: "+94 701234567",
-      position: "Manager",
-      salary: "$2500",
-      status: 'Active',
-      hiredDate: "2022-01-15",
-    },
-    {
-      staffID: 2,
-      userID: 102,
-      firstName: "Jane",
-      lastName: "Smith",
-      NIC: "987654321V",
-      mobileNumber: "+94 711234567",
-      position: "Waiter",
-      salary: "$1200",
-      status: 'Innactive',
-      hiredDate: "2023-06-10",
-    },
-    {
-      staffID: 3,
-      userID: 105,
-      firstName: "Duke",
-      lastName: "Smith",
-      NIC: "987654321V",
-      mobileNumber: "+94 711234567",
-      position: "Waiter",
-      salary: "$1200",
-      status: 'Resigned',
-      hiredDate: "2023-06-10",
-    },
-    // Add more staff members as needed
-  ];
+
+  const [staff, setStaff] = useState([]);
+  const [position, setPosition] = useState([]);
+
+  useEffect(() => {
+    const fetchStaff = async () => {
+      try {
+        const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/staff/staff`, {
+          headers: {
+            APIkey: process.env.REACT_APP_APIKey
+          }
+        })
+        setStaff(response.data)
+
+        if (response.data.length > 0) { 
+          const positionID = response.data[0].positionID; 
+          const positionResponse = await axios.get(`${process.env.REACT_APP_BASE_URL}/staff/positions?positionID=${positionID}`, {
+            headers: {
+              APIkey: process.env.REACT_APP_APIKey
+            }
+          });
+          setPosition(positionResponse.data);
+        }
+      } catch (err) {
+        console.log(err)
+      }
+    }
+    fetchStaff();
+  }, [])
 
   return (
     <div className="p-6 bg-gray-100 min-h-screen font-overpass">
@@ -70,7 +60,7 @@ const Staff = () => {
             </tr>
           </thead>
           <tbody>
-            {staffData.map((staff, index) => (
+            {staff.map((staff, index) => (
               <tr
                 key={staff.staffID}
                 className={`text-gray-800 text-sm font-medium ${
@@ -83,9 +73,9 @@ const Staff = () => {
                 </td>
                 <td className="px-4 py-3">{staff.NIC}</td>
                 <td className="px-4 py-3">{staff.mobileNumber}</td>
-                <td className="px-4 py-3">{staff.position}</td>
+                <td className="px-4 py-3">{position.length > 0 ? position[0].position_name : "Unknown"}</td>
                 <td className="px-4 py-3">{staff.salary}</td>
-                <td className="px-4 py-3">{staff.hiredDate}</td>
+                <td className="px-4 py-3">{new Date(staff.hired_date).toLocaleString()}</td>
                 <td 
                   className={`px-4 py-3 font-bold ${
                     staff.status === "Active"

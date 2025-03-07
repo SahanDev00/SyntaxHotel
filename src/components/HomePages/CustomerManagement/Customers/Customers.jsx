@@ -1,43 +1,37 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Pencil, Plus, Info } from "lucide-react";
+import axios from 'axios'
 
 const Customers = () => {
-  // Sample customer data (Replace this with API data later)
-  const customers = [
-    {
-      id: 1,
-      categoryID: 101,
-      fullName: "John Doe",
-      phone: "+1 123-456-7890",
-      email: "john.doe@example.com",
-      address: "123 Main Street, NY",
-      status: "Active",
-      bannedReason: null,
-      createdAt: "2024-02-20",
-    },
-    {
-      id: 2,
-      categoryID: 102,
-      fullName: "Jane Smith",
-      phone: "+1 987-654-3210",
-      email: "jane.smith@example.com",
-      address: "456 Oak Street, LA",
-      status: "Banned",
-      bannedReason: "Fraudulent activity detected",
-      createdAt: "2024-01-15",
-    },
-    {
-      id: 3,
-      categoryID: 103,
-      fullName: "Mike Johnson",
-      phone: "+1 555-123-4567",
-      email: "mike.johnson@example.com",
-      address: "789 Pine Street, TX",
-      status: "Inactive",
-      bannedReason: null,
-      createdAt: "2023-12-10",
-    },
-  ];
+
+  const [customers, setCustomers] = useState([]);
+  const [customerTypes, setCustomerTypes] = useState([]);
+
+  useEffect(() => {
+    const fetchCustomers = async () => {
+      try {
+        const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/customers/customers`, {
+          headers: {
+            APIkey: process.env.REACT_APP_APIKey
+          }
+        })
+        setCustomers(response.data)
+
+        if (response.data.length > 0) { 
+          const customerCategoryID = response.data[0].CustomerCategoryID; 
+          const typeResponse = await axios.get(`${process.env.REACT_APP_BASE_URL}/customers/category?CustomerCategoryID=${customerCategoryID}`, {
+            headers: {
+              APIkey: process.env.REACT_APP_APIKey
+            }
+          });
+          setCustomerTypes(typeResponse.data);
+        }
+      } catch (err) {
+        console.log(err)
+      }
+    }
+    fetchCustomers();
+  }, [])
 
   return (
     <div className="p-6 bg-gray-100 min-h-screen font-overpass">
@@ -73,9 +67,9 @@ const Customers = () => {
                   index % 2 === 0 ? "bg-gray-200" : "bg-gray-100"
                 }`}
               >
-                <td className="px-4 py-3">{customer.id}</td>
-                <td className="px-4 py-3">{customer.fullName}</td>
-                <td className="px-4 py-3">{customer.categoryID}</td>
+                <td className="px-4 py-3">{customer.CustomerID}</td>
+                <td className="px-4 py-3">{customer.full_name}</td>
+                <td className="px-4 py-3">{customerTypes.length > 0 ? customerTypes[0].category_name : "Unknown"}</td>
                 <td className="px-4 py-3">{customer.phone}</td>
                 <td className="px-4 py-3">{customer.email}</td>
                 <td className="px-4 py-3">{customer.address}</td>
@@ -96,7 +90,9 @@ const Customers = () => {
                     </span>
                   )}
                 </td>
-                <td className="px-4 py-3">{customer.createdAt}</td>
+                <td className="px-4 py-3">
+                  {new Date(customer.created_at).toLocaleString()}
+                </td>
                 <td className="px-4 py-3 flex justify-end gap-3">
                   <button className="text-blue-600 hover:text-blue-800">
                     <Pencil size={18} />
