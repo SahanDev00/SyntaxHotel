@@ -1,21 +1,28 @@
 
 -- Schema creation
-CREATE SCHEMA [user];
-CREATE SCHEMA [cus];
-CREATE SCHEMA [room];
-CREATE SCHEMA [boo];
-CREATE SCHEMA [pay];
-CREATE SCHEMA [inv];
-CREATE SCHEMA [hs];
-CREATE SCHEMA [st];
-CREATE SCHEMA [ser];
-CREATE SCHEMA [tab];
-CREATE SCHEMA [sal];
-CREATE SCHEMA [note];
-CREATE SCHEMA [syst];
-CREATE SCHEMA [charts];
+CREATE SCHEMA [user]
+CREATE SCHEMA [cus]
+CREATE SCHEMA [room]
+CREATE SCHEMA [boo]
+CREATE SCHEMA [pay]
+CREATE SCHEMA [inv]
+CREATE SCHEMA [hs]
+CREATE SCHEMA [st]
+CREATE SCHEMA [ser]
+CREATE SCHEMA [tab]
+CREATE SCHEMA [sal]
+CREATE SCHEMA [note]
+CREATE SCHEMA [syst]
+CREATE SCHEMA [charts]
 
 -- table creation
+
+-- 🎭 Roles Table (Role-Based Access Control)
+CREATE TABLE [user].roles (
+    roleID INT IDENTITY(1,1) PRIMARY KEY,
+    role_name VARCHAR(20) CHECK (role_name IN ('Admin', 'Manager', 'Receptionist', 'Staff')) NOT NULL,
+    permissions NVARCHAR(MAX) -- JSON format for permissions
+);
 
 -- 🚀 Users Table (Admin, Staff, Customers)
 CREATE TABLE [user].users (
@@ -28,16 +35,10 @@ CREATE TABLE [user].users (
     phone VARCHAR(15),
     status VARCHAR(20) CHECK (status IN ('Active', 'Innactive')) DEFAULT 'Active',
     created_at DATETIME DEFAULT GETDATE(),
-    FOREIGN KEY (staffID) REFERENCES [user].users(userID),
+    FOREIGN KEY (staffID) REFERENCES [st].staff(staffID),
     FOREIGN KEY (roleID) REFERENCES [user].roles(roleID),
 );
 
--- 🎭 Roles Table (Role-Based Access Control)
-CREATE TABLE [user].roles (
-    roleID INT IDENTITY(1,1) PRIMARY KEY,
-    role_name VARCHAR(20) CHECK (role_name IN ('Admin', 'Manager', 'Receptionist', 'Staff')) NOT NULL,
-    permissions NVARCHAR(MAX) -- JSON format for permissions
-);
 
 -- 🏨 Customer Categories Table
 CREATE TABLE [cus].customerCategory (
@@ -95,6 +96,27 @@ CREATE TABLE [tab].tables (
     FOREIGN KEY (tableTypeID) REFERENCES [tab].table_types(tableTypeID) ON DELETE CASCADE
 );
 
+-- 🏢 Staff positions Table
+CREATE TABLE [st].staff_positions (
+    positionID INT IDENTITY(1,1) PRIMARY KEY,
+    position_name VARCHAR(100) NOT NULL
+);
+
+-- 🏢 Staff Table
+CREATE TABLE [st].staff (
+    staffID INT IDENTITY(1,1) PRIMARY KEY,
+    firstName VARCHAR(50) NOT NULL,
+    lastName VARCHAR(50) NOT NULL,
+    NIC VARCHAR(50) NOT NULL,
+    mobileNumber VARCHAR(50) NOT NULL,
+    positionID INT NOT NULL,
+    salary DECIMAL(10,2) NOT NULL,
+    hired_date DATE NOT NULL,
+    created_date DATETIME DEFAULT GETDATE(),
+    status VARCHAR(20) CHECK (status IN ('Active', 'Innactive', 'Resigned')) DEFAULT 'Active',
+    FOREIGN KEY (positionID) REFERENCES [st].staff_positions(positionID)
+);
+
 -- 📅 Bookings Table
 CREATE TABLE [boo].bookings (
     bookingID INT IDENTITY(1,1) PRIMARY KEY,
@@ -135,6 +157,8 @@ CREATE TABLE [inv].invoices (
     FOREIGN KEY (bookingID) REFERENCES [boo].bookings(bookingID) ON DELETE CASCADE
 );
 
+
+
 -- 🛏️ Housekeeping Table (Cleaning & Maintenance)
 CREATE TABLE [hs].housekeeping (
     housekeepingID INT IDENTITY(1,1) PRIMARY KEY,
@@ -143,29 +167,9 @@ CREATE TABLE [hs].housekeeping (
     cleaning_date DATETIME DEFAULT GETDATE(),
     status VARCHAR(20) CHECK (status IN ('Pending', 'In Progress', 'Completed')) DEFAULT 'Pending',
     FOREIGN KEY (roomID) REFERENCES [room].rooms(roomID) ON DELETE CASCADE,
-    FOREIGN KEY (staffID) REFERENCES [user].users(userID) ON DELETE CASCADE
+    FOREIGN KEY (staffID) REFERENCES [st].staff(staffID) ON DELETE CASCADE
 );
 
--- 🏢 Staff positions Table
-CREATE TABLE [st].staff_positions (
-    positionID INT IDENTITY(1,1) PRIMARY KEY,
-    position_name VARCHAR(100) NOT NULL
-);
-
--- 🏢 Staff Table
-CREATE TABLE [st].staff (
-    staffID INT IDENTITY(1,1) PRIMARY KEY,
-    firstName VARCHAR(50) NOT NULL,
-    lastName VARCHAR(50) NOT NULL,
-    NIC VARCHAR(50) NOT NULL,
-    mobileNumber VARCHAR(50) NOT NULL,
-    positionID INT NOT NULL,
-    salary DECIMAL(10,2) NOT NULL,
-    hired_date DATE NOT NULL,
-    created_date DATETIME DEFAULT GETDATE()
-    status VARCHAR(20) CHECK (status IN ('Active', 'Innactive', 'Resigned')) DEFAULT 'Active',
-    FOREIGN KEY (positionID) REFERENCES [st].staff_positions(positionID)
-);
 
 
 -- 🏨 Extra Services (Spa, Laundry, etc.)
@@ -182,7 +186,7 @@ CREATE TABLE [ser].service_orders (
     bookingID INT NOT NULL,
     serviceID INT NOT NULL,
     order_date DATETIME DEFAULT GETDATE(),
-    status VARCHAR(20) CHECK (status IN ('Requested', 'In-Progress' 'Completed', 'Cancelled')) DEFAULT 'Requested',
+    status VARCHAR(20) CHECK (status IN ('Requested', 'In-Progress', 'Completed', 'Cancelled')) DEFAULT 'Requested',
     cancelled_reason VARCHAR(MAX),
     total_price DECIMAL(10,2),
     paid_price DECIMAL(10,2),
@@ -190,7 +194,7 @@ CREATE TABLE [ser].service_orders (
     paid_status VARCHAR(20) CHECK (paid_status IN ('Paid', 'Pending', 'Cancelled')) DEFAULT 'Pending',
     FOREIGN KEY (bookingID) REFERENCES [boo].bookings(bookingID),
     FOREIGN KEY (serviceID) REFERENCES [ser].extra_services(serviceID),
-    FOREIGN KEY (staffID) REFERENCES [user].users(userID)
+    FOREIGN KEY (staffID) REFERENCES [st].staff(staffID)
 );
 
 -- 🛎️ inventory Table 
@@ -207,18 +211,10 @@ CREATE TABLE [cus].customer_orders (
     OrderID INT IDENTITY(1,1) PRIMARY KEY,
     bookingID INT NOT NULL,
     OrderedItems NVARCHAR(MAX), -- JSON format for permissions
-    paid_status VARCHAR(20) CHECK (status IN ('Paid', 'Not Paid', 'Cancelled')) DEFAULT 'Not Paid',
-    order_date DATETIME DEFAULT GETDATE()
+    paid_status VARCHAR(20) CHECK (paid_status IN ('Paid', 'Not Paid', 'Cancelled')) DEFAULT 'Not Paid',
+    order_date DATETIME DEFAULT GETDATE(),
     FOREIGN KEY (bookingID) REFERENCES [boo].bookings(bookingID),
 )
-
--- 🛎️ inventory Table 
-CREATE TABLE [note].hotel_notes (
-    noteID INT IDENTITY(1,1) PRIMARY KEY,
-    note VARCHAR(MAX) NOT NULL,
-    userID INT Not Null,
-    FOREIGN KEY (userID) REFERENCES [user].users(userID)
-);
 
 -- Settings table
 CREATE TABLE [syst].Settings (
@@ -251,6 +247,35 @@ CREATE TABLE [charts].events (
     created_at DATETIME DEFAULT GETDATE()
 );
 
+-- 🛎️ Hotel notes Table 
+CREATE TABLE [note].hotel_notes (
+    noteID INT IDENTITY(1,1) PRIMARY KEY,
+    topic VARCHAR(50) NOT NULL,
+    note VARCHAR(MAX) NOT NULL,
+    userID INT Not Null,
+    FOREIGN KEY (userID) REFERENCES [user].users(userID),
+    created_at DATETIME DEFAULT GETDATE()
+);
+
+-- Customer Notes table
+CREATE TABLE [note].customer_notes (
+    noteID INT IDENTITY(1,1) PRIMARY KEY,
+    topic VARCHAR(50) NOT NULL,
+    note VARCHAR(MAX) NOT NULL,
+    userID INT Not Null,
+    FOREIGN KEY (userID) REFERENCES [user].users(userID),
+    created_at DATETIME DEFAULT GETDATE()
+);
+
+-- Booking Notes table
+CREATE TABLE [note].booking_notes (
+    noteID INT IDENTITY(1,1) PRIMARY KEY,
+    topic VARCHAR(50) NOT NULL,
+    note VARCHAR(MAX) NOT NULL,
+    userID INT Not Null,
+    FOREIGN KEY (userID) REFERENCES [user].users(userID),
+    created_at DATETIME DEFAULT GETDATE()
+);
 
 -- table changes
 INSERT INTO syst.Settings (SettingName, SettingValue) VALUES ('APIKey', '0661');

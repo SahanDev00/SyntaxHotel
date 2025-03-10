@@ -1,0 +1,2467 @@
+
+GO
+/****** Object:  StoredProcedure [boo].[bookingsAddEdit]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [boo].[bookingsAddEdit] (
+    @APIKey VARCHAR(255),
+    @bookingID INT = NULL, -- For Edit, if NULL, it's for Add
+    @customerID INT,
+    @roomID INT = NULL,
+    @tableID INT = NULL,
+    @check_in_date DATE,
+    @check_out_date DATE,
+    @booking_status VARCHAR(20) = 'Booked',
+    @total_price DECIMAL(10,2),
+    @paid_status VARCHAR(20) = 'Pending',
+    @paid_price DECIMAL(10,2) = 0,
+    @staffID INT,
+    @payment_method VARCHAR(20)
+)
+AS
+BEGIN
+    -- Check if the API key exists in the settings table
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        -- If API Key doesn't exist, throw an error
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+    BEGIN TRY
+        -- If bookingID is provided, it's an Edit operation
+        IF @bookingID IS NOT NULL
+        BEGIN
+            -- Check if the booking status is 'Checked-out' and the paid_status is 'Pending'
+            IF @booking_status = 'Checked-out' AND (SELECT paid_status from [boo].bookings WHERE bookingID = @bookingID) = 'Pending'
+            BEGIN
+                THROW 50002, 'Cannot change booking status to Checked-out while payment is pending', 1;
+            END
+
+            -- Check if the paid_price matches the total_price before updating paid_status to 'Paid'
+            IF @paid_status = 'Paid' AND (SELECT paid_price from [boo].bookings WHERE bookingID = @bookingID) + @paid_price <> (SELECT total_price from [boo].bookings WHERE bookingID = @bookingID)
+            BEGIN
+                THROW 50003, 'Paid amount does not match the total price. Cannot mark as Paid', 1;
+            END
+
+			-- Check for active service orders (Requested or In-Progress) for the given bookingID
+			IF @booking_status IN ('Checked-out', 'Cancelled')
+			BEGIN
+				IF EXISTS (
+					SELECT 1
+					FROM [ser].service_orders
+					WHERE bookingID = @bookingID
+					AND status IN ('Requested', 'In-Progress')
+				)
+				BEGIN
+					THROW 50005, 'Cannot change booking status to Checked-out or Cancelled while there are active service orders.', 1;
+				END
+			END
+
+			-- Check for active customer orders (Not-Paid) for the given bookingID
+			IF @booking_status IN ('Checked-out', 'Cancelled')
+			BEGIN
+				IF EXISTS (
+					SELECT 1
+					FROM [cus].customer_orders
+					WHERE bookingID = @bookingID
+					AND paid_status IN ('Not Paid')
+				)
+				BEGIN
+					THROW 50005, 'Cannot change booking status to Checked-out or Cancelled while there are active customer orders.', 1;
+				END
+			END
+
+            -- If the paid_status is 'Paid' and the payment is partial, add the paid_price to the existing amount
+            IF @paid_status = 'Paid' AND @paid_price > 0
+            BEGIN
+                UPDATE [boo].bookings
+                SET paid_price = paid_price + @paid_price
+                WHERE bookingID = @bookingID;
+
+				-- Add a new invoice when a payment is successfully completed
+				INSERT [inv].invoices (bookingID, total_amount, invoice_date) 
+					VALUES (@bookingID, @paid_price, GETDATE())
+            END
+
+            -- Only update payment status to 'Completed' if the total paid amount equals the total price
+            IF @paid_status = 'Paid' AND (SELECT paid_price from [boo].bookings WHERE bookingID = @bookingID) = (SELECT total_price from [boo].bookings WHERE bookingID = @bookingID)
+            BEGIN
+                -- Update payment status to 'Completed' when full payment is made
+                UPDATE [pay].payments
+                SET status = 'Completed'
+                WHERE bookingID = @bookingID AND status = 'Pending';
+
+				-- Add a new invoice when a payment is successfully completed
+				INSERT [inv].invoices (bookingID, total_amount, invoice_date) 
+					VALUES (@bookingID, (SELECT paid_price from [boo].bookings WHERE bookingID = @bookingID), GETDATE() )
+            
+				-- UPDATE the monthly sale count of current month 
+				UPDATE [charts].monthly_sales SET sales = sales + 1 WHERE month = FORMAT(GETDATE(), 'MMMM');
+			END
+
+            -- Handle the room and table status when booking status is 'Checked-out' or 'Cancelled'
+            IF (@roomID IS NOT NULL)
+            BEGIN
+                IF @booking_status IN ('Checked-out', 'Cancelled') AND (SELECT paid_status from [boo].bookings WHERE bookingID = @bookingID) = 'Paid'
+                BEGIN
+                    UPDATE [room].rooms
+                    SET status = 'Available'
+                    WHERE roomID = @roomID;
+                END
+            END
+
+            IF (@tableID IS NOT NULL)
+            BEGIN
+                IF @booking_status IN ('Checked-out', 'Cancelled') AND (SELECT paid_status from [boo].bookings WHERE bookingID = @bookingID) = 'Paid'
+                BEGIN
+                    UPDATE [tab].tables
+                    SET status = 'Available'
+                    WHERE tableID = @tableID;
+                END
+            END
+
+            -- Check for inconsistency with cancellation of paid status
+            IF (@paid_status = 'Cancelled') AND @booking_status != 'Cancelled'
+            BEGIN
+                THROW 50004, 'Cannot cancel paid status when booking status is not cancelled!', 1;
+            END
+
+            -- Edit the existing booking
+            UPDATE [boo].bookings
+            SET customerID = @customerID,
+                roomID = @roomID,
+                tableID = @tableID,
+                check_in_date = @check_in_date,
+                check_out_date = @check_out_date,
+                booking_status = @booking_status,
+                total_price = @total_price,
+                paid_status = @paid_status,
+                paid_price = @paid_price,
+                staffID = @staffID
+            WHERE bookingID = @bookingID;
+
+			-- Updating payment status to Cancelled if the payment is cancelled
+			IF (SELECT paid_status from [boo].bookings WHERE bookingID = @bookingID) = 'Cancelled' 
+			BEGIN
+				UPDATE [pay].payments SET status = 'Cancelled' WHERE bookingID = @bookingID
+			END
+
+            -- Check if any rows were affected (if bookingID doesn't exist)
+            IF @@ROWCOUNT = 0
+            BEGIN
+                THROW 50001, 'Booking not found for editing', 1;
+            END
+        END
+        ELSE
+        BEGIN
+            -- Add a new booking
+            INSERT INTO [boo].bookings (customerID, roomID, tableID, check_in_date, check_out_date, booking_status, total_price, paid_status, paid_price, staffID)
+            VALUES (@customerID, @roomID, @tableID, @check_in_date, @check_out_date, @booking_status, (@total_price), @paid_status, @paid_price, @staffID);
+
+            -- Insert a payment for the new booking
+            INSERT INTO [pay].payments (bookingID, amount, payment_method, status)
+            VALUES (SCOPE_IDENTITY(), @total_price, @payment_method, 'Pending');
+
+            -- Update the status of room or table if assigned
+            IF (@roomID IS NOT NULL)
+            BEGIN
+                UPDATE [room].rooms
+                SET status = 'Occupied'
+                WHERE roomID = @roomID;
+            END
+
+            IF (@tableID IS NOT NULL)
+            BEGIN
+                UPDATE [tab].tables
+                SET status = 'Occupied'
+                WHERE tableID = @tableID;
+            END
+        END
+    END TRY
+    BEGIN CATCH
+        -- Handle any errors that occur in the try block
+        THROW;
+    END CATCH
+END;
+GO
+/****** Object:  StoredProcedure [boo].[bookingsGet]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [boo].[bookingsGet] (
+    @APIKey VARCHAR(255),
+    @BookingID INT = NULL,
+    @CustomerID INT = NULL,
+    @RoomID INT = NULL,
+    @TableID INT = NULL,
+    @BookingStatus VARCHAR(20) = NULL,
+    @PaidStatus VARCHAR(20) = NULL,
+    @CheckInDate DATE = NULL,
+    @CheckOutDate DATE = NULL
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Validate API Key
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+    -- Fetch bookings based on optional filters
+    SELECT * 
+    FROM [boo].bookings
+    WHERE 
+        (@BookingID IS NULL OR bookingID = @BookingID) AND
+        (@CustomerID IS NULL OR customerID = @CustomerID) AND
+        (@RoomID IS NULL OR roomID = @RoomID) AND
+        (@TableID IS NULL OR tableID = @TableID) AND
+        (@BookingStatus IS NULL OR booking_status = @BookingStatus) AND
+        (@PaidStatus IS NULL OR paid_status = @PaidStatus) AND
+        (@CheckInDate IS NULL OR check_in_date = @CheckInDate) AND
+        (@CheckOutDate IS NULL OR check_out_date = @CheckOutDate);
+END;
+GO
+/****** Object:  StoredProcedure [boo].[bookingsGetPrice]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [boo].[bookingsGetPrice] (
+    @APIKey VARCHAR(255),
+    @CustomerID INT = NULL,
+    @RoomID INT = NULL,
+    @TableID INT = NULL,
+    @CheckInDate DATETIME = NULL,
+    @CheckOutDate DATETIME = NULL
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Validate API Key
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+	-- Check if the customer category has extra fees
+	DECLARE @customerCategoryID INT;
+	DECLARE @additionalFeeRate DECIMAL(10,2);
+	DECLARE @additionalFeeAmount DECIMAL(10,2);
+
+	SELECT @customerCategoryID = customer_categoryID 
+	FROM [cus].customers 
+	WHERE CustomerID = @CustomerID;
+
+	SELECT @additionalFeeRate = additionalFeeRate, 
+		   @additionalFeeAmount = AdditionalFeeAmount 
+	FROM [cus].customerCategory 
+	WHERE categoryID = @customerCategoryID;
+
+	-- Declare total price variable
+	DECLARE @TotalPrice DECIMAL(10,2) = 0;
+
+	-- Check the room price (if a room is booked)
+	IF (@RoomID IS NOT NULL)
+	BEGIN
+		DECLARE @roomTypeID INT; 
+		DECLARE @price_per_night DECIMAL(10,2);
+		DECLARE @num_days INT;
+
+		SELECT @roomTypeID = roomTypeID 
+		FROM [room].rooms 
+		WHERE roomID = @RoomID;
+
+		SELECT @price_per_night = price_per_night 
+		FROM [room].room_types 
+		WHERE roomTypeID = @roomTypeID;
+
+		-- Calculate number of days
+		SET @num_days = DATEDIFF(DAY, @CheckInDate, @CheckOutDate);
+		IF (@num_days < 1) SET @num_days = 1; -- At least one day
+
+		-- Calculate room cost
+		SET @TotalPrice = @TotalPrice + (@price_per_night * @num_days);
+	END
+
+	-- Check the table price (if a table is booked)
+	IF (@TableID IS NOT NULL)
+	BEGIN
+		DECLARE @tableTypeID INT; 
+		DECLARE @price_per_hour DECIMAL(10,2);
+		DECLARE @num_hours INT;
+
+		SELECT @tableTypeID = tableTypeID 
+		FROM [tab].tables 
+		WHERE tableID = @TableID;
+
+		SELECT @price_per_hour = price_per_hour 
+		FROM [tab].table_types 
+		WHERE tableTypeID = @tableTypeID;
+
+		-- Calculate number of hours
+		SET @num_hours = DATEDIFF(HOUR, @CheckInDate, @CheckOutDate);
+		IF (@num_hours < 1) SET @num_hours = 1; -- At least one hour
+
+		-- Calculate table cost
+		SET @TotalPrice = @TotalPrice + (@price_per_hour * @num_hours);
+	END
+
+	-- Apply additional fees
+	SET @TotalPrice = @TotalPrice 
+					+ @additionalFeeAmount 
+					+ (@additionalFeeRate * @TotalPrice / 100); -- Applying percentage fee
+
+	-- Return the total price
+	SELECT @TotalPrice AS 'Total Price';
+END
+GO
+/****** Object:  StoredProcedure [boo].[roomBookingsGet]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [boo].[roomBookingsGet] (
+    @APIKey VARCHAR(255),
+    @BookingID INT = NULL,
+    @CustomerID INT = NULL,
+    @RoomID INT = NULL,
+    @BookingStatus VARCHAR(20) = NULL,
+    @PaidStatus VARCHAR(20) = NULL,
+    @CheckInDate DATE = NULL,
+    @CheckOutDate DATE = NULL
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Validate API Key
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        ;THROW 50000, 'Invalid API Key', 1;
+    END
+
+    -- Fetch bookings based on optional filters
+    SELECT 
+	 	b.bookingID, 
+		c.full_name, 
+		r.room_number, 
+		b.check_in_date,
+		b.check_out_date,
+		b.booking_status,
+		b.total_price,
+		st.firstName + ' ' + st.lastName as fullName,
+		b.created_at
+
+    FROM [boo].bookings AS b
+		JOIN [cus].customers AS c ON b.customerID = c.CustomerID
+		JOIN [room].rooms AS r ON b.roomID = r.roomID
+		JOIN [st].staff AS st ON b.staffID = st.staffID
+
+    WHERE 
+        (@BookingID IS NULL OR b.bookingID = @BookingID) AND
+        (@CustomerID IS NULL OR b.customerID = @CustomerID) AND
+        (@RoomID IS NULL OR b.roomID = @RoomID) AND
+        (b.tableID IS NULL OR b.tableID IS NULL) AND  -- Only select rows where tableID is NULL
+        (@BookingStatus IS NULL OR b.booking_status = @BookingStatus) AND
+        (@PaidStatus IS NULL OR b.paid_status = @PaidStatus) AND
+        (@CheckInDate IS NULL OR b.check_in_date = @CheckInDate) AND
+        (@CheckOutDate IS NULL OR b.check_out_date = @CheckOutDate);
+END;
+
+
+GO
+/****** Object:  StoredProcedure [boo].[tableBookingsGet]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [boo].[tableBookingsGet] (
+    @APIKey VARCHAR(255),
+    @BookingID INT = NULL,
+    @CustomerID INT = NULL,
+    @TableID INT = NULL,
+    @BookingStatus VARCHAR(20) = NULL,
+    @PaidStatus VARCHAR(20) = NULL,
+    @CheckInDate DATE = NULL,
+    @CheckOutDate DATE = NULL
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Validate API Key
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        ;THROW 50000, 'Invalid API Key', 1;
+    END
+
+    -- Fetch bookings based on optional filters
+    SELECT 
+	 	b.bookingID, 
+		c.full_name, 
+		t.table_number, 
+		b.check_in_date,
+		b.check_out_date,
+		b.booking_status,
+		b.total_price,
+		s.firstName + ' ' + s.lastName as fullName,
+		b.created_at
+
+    FROM [boo].bookings AS b
+		JOIN [cus].customers AS c ON b.customerID = c.CustomerID
+		JOIN [tab].tables AS t ON b.tableID = t.tableID
+		JOIN [st].staff AS s ON b.staffID = s.staffID
+    WHERE 
+        (@BookingID IS NULL OR bookingID = @BookingID) AND
+        (@CustomerID IS NULL OR b.customerID = @CustomerID) AND
+        (roomID IS NULL OR roomID IS NULL) AND
+        (@TableID IS NULL OR b.tableID = @TableID ) AND  -- Only select rows where tableID is NOT NULL
+        (@BookingStatus IS NULL OR booking_status = @BookingStatus) AND
+        (@PaidStatus IS NULL OR paid_status = @PaidStatus) AND
+        (@CheckInDate IS NULL OR check_in_date = @CheckInDate) AND
+        (@CheckOutDate IS NULL OR check_out_date = @CheckOutDate);
+END;
+GO
+/****** Object:  StoredProcedure [charts].[customerGrowthGet]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [charts].[customerGrowthGet] (
+	@APIKey VARCHAR(255)
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Validate API Key
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+	SELECT * FROM [charts].customer_growth
+
+END
+GO
+/****** Object:  StoredProcedure [charts].[eventsGet]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [charts].[eventsGet] (
+	@APIKey VARCHAR(255)
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Validate API Key
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+	SELECT * FROM [charts].events
+
+END
+GO
+/****** Object:  StoredProcedure [charts].[monthlySalesGet]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [charts].[monthlySalesGet] (
+	@APIKey VARCHAR(255)
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Validate API Key
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+	SELECT * FROM [charts].monthly_sales
+
+END
+GO
+/****** Object:  StoredProcedure [charts].[upcomingEventsGet]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [charts].[upcomingEventsGet] (
+	@APIKey VARCHAR(255)
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Validate API Key
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+	SELECT * FROM [charts].events WHERE date >= GETDATE();
+
+END
+GO
+/****** Object:  StoredProcedure [charts].[upcomingReservationsGet]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [charts].[upcomingReservationsGet] (
+	@APIKey VARCHAR(255)
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Validate API Key
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+	SELECT 
+		b.bookingID, 
+		c.full_name, 
+		r.room_number, 
+		t.table_number, 
+		b.check_in_date 
+	FROM 
+		[boo].bookings AS b 
+	LEFT JOIN [cus].customers AS c ON b.customerID = c.CustomerID 
+	LEFT JOIN [room].rooms AS r ON b.roomID = r.roomID
+	LEFT JOIN [tab].tables AS t ON b.tableID = t.tableID
+	WHERE 
+		(b.roomID IS NOT NULL OR b.tableID IS NOT NULL) 
+		AND b.check_in_date >= CAST(GETDATE() AS DATE);
+
+
+END
+GO
+/****** Object:  StoredProcedure [cus].[CustomerByBookingIDGet]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [cus].[CustomerByBookingIDGet] (
+    @APIKey VARCHAR(255),
+    @BookingID INT
+)
+AS
+BEGIN
+    -- Validate API Key
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        ;THROW 50000, 'Invalid API Key', 1;
+    END
+
+	DECLARE @customerID INT;
+	SELECT @customerID = customerID FROM boo.bookings WHERE bookingID = @BookingID;
+	PRINT 'CustomerID: ' + CAST(@customerID AS VARCHAR(255));  -- Add for debugging
+
+
+	SELECT full_name as 'full_name' FROM cus.customers WHERE CustomerID = @customerID;
+END
+
+GO
+/****** Object:  StoredProcedure [cus].[customerCategoryAddEdit]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [cus].[customerCategoryAddEdit] (
+    @APIKey VARCHAR(255),
+    @categoryID INT = NULL, -- For Edit, if it's NULL, it'll be for Add
+    @category_name VARCHAR(100),
+    @additionalFeeRate DECIMAL(10,2) = 0,
+    @additionalFeeAmount DECIMAL(10,2) = 0
+)
+AS
+BEGIN
+    -- Check if the API key exists in the settings table
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        -- If API Key doesn't exist, throw an error
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+    BEGIN TRY
+        -- If categoryID is provided, it's an Edit operation
+        IF @categoryID IS NOT NULL
+        BEGIN
+            -- Edit the existing category
+            UPDATE [cus].customerCategory
+            SET category_name = @category_name,
+                additionalFeeRate = @additionalFeeRate,
+                additionalFeeAmount = @additionalFeeAmount
+            WHERE categoryID = @categoryID;
+
+            -- Check if any rows were affected (if categoryID doesn't exist)
+            IF @@ROWCOUNT = 0
+            BEGIN
+                THROW 50001, 'Category not found for editing', 1;
+            END
+        END
+        ELSE
+        BEGIN
+            -- Add a new category
+            INSERT INTO [cus].customerCategory (category_name, additionalFeeRate, additionalFeeAmount)
+            VALUES (@category_name, @additionalFeeRate, @additionalFeeAmount);
+        END
+    END TRY
+    BEGIN CATCH
+        -- Handle any errors that occur in the try block
+        THROW;
+    END CATCH
+END;
+GO
+/****** Object:  StoredProcedure [cus].[CustomerCategoryGet]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [cus].[CustomerCategoryGet] (
+    @APIKey VARCHAR(255),
+    @CategoryID INT = NULL,
+    @CategoryName VARCHAR(100) = NULL,
+    @AdditionalFeeRate VARCHAR(100) = NULL,
+	@AdditionalFeeAmount VARCHAR(100) = NULL
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Validate API Key
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+    -- Fetch customers based on optional filters
+    SELECT * 
+    FROM [cus].customerCategory
+    WHERE 
+        (@CategoryID IS NULL OR categoryID = @CategoryID) AND
+        (@CategoryName IS NULL OR category_name LIKE '%' + category_name + '%') AND
+        (@AdditionalFeeRate IS NULL OR additionalFeeRate = additionalFeeRate) AND
+		(@AdditionalFeeAmount IS NULL OR additionalFeeAmount = additionalFeeAmount);
+END;
+GO
+/****** Object:  StoredProcedure [cus].[CustomerCount]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [cus].[CustomerCount] (
+	@APIKey VARCHAR(255)
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Validate API Key
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+	SELECT COUNT(*) AS Count FROM [cus].customers
+END
+GO
+/****** Object:  StoredProcedure [cus].[customersAddEdit]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [cus].[customersAddEdit] (
+    @APIKey VARCHAR(255),
+    @CustomerID INT = NULL, -- For Edit, if NULL, it's for Add
+    @customer_categoryID INT,
+    @full_name VARCHAR(100),
+    @phone VARCHAR(15),
+    @email VARCHAR(100),
+    @address TEXT,
+    @status VARCHAR(20) = 'Active',
+    @banned_reason TEXT = NULL
+)
+AS
+BEGIN
+    -- Check if the API key exists in the settings table
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        -- If API Key doesn't exist, throw an error
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+    BEGIN TRY
+        -- If CustomerID is provided, it's an Edit operation
+        IF @CustomerID IS NOT NULL
+        BEGIN
+            -- Edit the existing customer
+            UPDATE [cus].customers
+            SET customer_categoryID = @customer_categoryID,
+                full_name = @full_name,
+                phone = @phone,
+                email = @email,
+                address = @address,
+                status = @status,
+                banned_reason = @banned_reason
+            WHERE CustomerID = @CustomerID;
+
+            -- Check if any rows were affected (if CustomerID doesn't exist)
+            IF @@ROWCOUNT = 0
+            BEGIN
+                THROW 50001, 'Customer not found for editing', 1;
+            END
+        END
+        ELSE
+        BEGIN
+            -- Add a new customer
+            INSERT INTO [cus].customers (customer_categoryID, full_name, phone, email, address, status, banned_reason)
+            VALUES (@customer_categoryID, @full_name, @phone, @email, @address, @status, @banned_reason);
+        END
+    END TRY
+    BEGIN CATCH
+        -- Handle any errors that occur in the try block
+        THROW;
+    END CATCH
+END;
+GO
+/****** Object:  StoredProcedure [cus].[customersGet]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [cus].[customersGet] (
+    @APIKey VARCHAR(255),
+    @CustomerID INT = NULL,
+    @CustomerCategoryID INT = NULL,
+    @FullName VARCHAR(100) = NULL,
+    @Phone VARCHAR(15) = NULL,
+    @Email VARCHAR(100) = NULL,
+    @Status VARCHAR(20) = NULL
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Validate API Key
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+    -- Fetch customers based on optional filters
+    SELECT * 
+    FROM [cus].customers
+    WHERE 
+        (@CustomerID IS NULL OR CustomerID = @CustomerID) AND
+        (@CustomerCategoryID IS NULL OR customer_categoryID = @CustomerCategoryID) AND
+        (@FullName IS NULL OR full_name LIKE '%' + @FullName + '%') AND
+        (@Phone IS NULL OR phone = @Phone) AND
+        (@Email IS NULL OR email = @Email) AND
+        (@Status IS NULL OR status = @Status);
+END;
+GO
+/****** Object:  StoredProcedure [cus].[deleteCustomer]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+Create PROCEDURE [cus].[deleteCustomer] (
+    @customerID INT,
+    @APIKey VARCHAR(255) -- API key as input
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Check if the API key exists in the settings table
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        -- If API Key doesn't exist, throw an error
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+    -- Check if there are any bookings associated with the customer
+    IF EXISTS (SELECT 1 FROM [boo].bookings WHERE customerID = @customerID)
+    BEGIN
+        -- If bookings exist, throw an error
+        THROW 50000, 'Cannot delete customer. There are bookings associated with this customer.', 1;
+    END
+
+    -- If no bookings exist, proceed with deleting the customer
+    DELETE FROM [cus].customers
+    WHERE CustomerID = @customerID;
+
+    -- Optionally, return a success message
+    PRINT 'Customer deleted successfully.';
+END;
+GO
+/****** Object:  StoredProcedure [cus].[deleteCustomerCategory]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [cus].[deleteCustomerCategory] (
+    @categoryID INT,
+    @APIKey VARCHAR(255)
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Check if the API key exists in the settings table
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        -- If API Key doesn't exist, throw an error
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+    -- Check if any customers are associated with this category
+    IF EXISTS (SELECT 1 FROM [cus].customers WHERE customer_categoryID = @categoryID)
+    BEGIN
+        -- If there are customers, throw an exception
+        THROW 50000, 'Cannot delete category. There are customers associated with this category.', 1;
+    END
+
+    -- If no customers, proceed with deleting the category
+    DELETE FROM [cus].customerCategory
+    WHERE categoryID = @categoryID;
+    
+    -- Optionally return a success message
+    PRINT 'Category deleted successfully.';
+END;
+
+GO
+/****** Object:  StoredProcedure [hs].[deleteHousekeepingPending]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [hs].[deleteHousekeepingPending] (
+    @roomID INT,  -- Room ID for which the housekeeping record will be deleted
+    @APIKey VARCHAR(255) -- API Key as input
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Check if the API key exists in the settings table
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        -- If API Key doesn't exist, throw an error
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+    -- Check if the housekeeping record exists with the given roomID
+    IF NOT EXISTS (SELECT 1 FROM [hs].housekeeping WHERE roomID = @roomID)
+    BEGIN
+        -- If no record found, throw an error
+        THROW 50000, 'No housekeeping record found for the given roomID', 1;
+    END
+
+    -- Check if the status is not 'Pending' for the given roomID
+    IF EXISTS (SELECT 1 FROM [hs].housekeeping WHERE roomID = @roomID AND status != 'Pending')
+    BEGIN
+        -- If status is 'Completed' or 'In Progress', throw an error
+        THROW 50000, 'Cannot delete housekeeping record. The status is not "Pending".', 1;
+    END
+
+    -- Proceed with deletion since status is 'Pending'
+    DELETE FROM [hs].housekeeping
+    WHERE roomID = @roomID AND status = 'Pending';
+
+    -- Optionally, return a success message
+    PRINT 'Housekeeping record deleted successfully!';
+END;
+GO
+/****** Object:  StoredProcedure [hs].[housekeepingAddEdit]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [hs].[housekeepingAddEdit] (
+    @APIKey VARCHAR(255),
+    @housekeepingID INT = NULL,  -- For editing, NULL means Add
+    @roomID INT,
+    @staffID INT,
+    @cleaning_date DATETIME,  -- Default to current date/time
+    @status VARCHAR(20) = 'Pending'  -- Default to 'Pending'
+)
+AS
+BEGIN
+    -- Check if the API key exists in the settings table
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        -- If API Key doesn't exist, throw an error
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+    BEGIN TRY
+        -- If housekeepingID is provided, it's an Edit operation
+        IF @housekeepingID IS NOT NULL
+        BEGIN
+            -- Edit the existing housekeeping record
+            UPDATE [hs].housekeeping
+            SET roomID = @roomID,
+                staffID = @staffID,
+                cleaning_date = @cleaning_date,
+                status = @status
+            WHERE housekeepingID = @housekeepingID;
+
+            -- Check if any rows were affected (if housekeepingID doesn't exist)
+            IF @@ROWCOUNT = 0
+            BEGIN
+                THROW 50001, 'Housekeeping record not found for editing', 1;
+            END
+        END
+        ELSE
+        BEGIN
+            -- Add a new housekeeping record
+            INSERT INTO [hs].housekeeping (roomID, staffID, cleaning_date, status)
+            VALUES (@roomID, @staffID, @cleaning_date, @status);
+        END
+    END TRY
+    BEGIN CATCH
+        -- Handle any errors that occur in the try block
+        THROW;
+    END CATCH
+END;
+GO
+/****** Object:  StoredProcedure [hs].[housekeepingGet]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [hs].[housekeepingGet] (
+    @APIKey VARCHAR(255),
+    @HousekeepingID INT = NULL,
+    @RoomID INT = NULL,
+    @StaffID INT = NULL,
+    @CleaningDate DATE = NULL,
+    @Status VARCHAR(20) = NULL
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Validate API Key
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+    -- Fetch housekeeping based on optional filters
+    SELECT * 
+    FROM [hs].housekeeping
+    WHERE 
+        (@HousekeepingID IS NULL OR housekeepingID = @HousekeepingID) AND
+        (@RoomID IS NULL OR roomID = @RoomID) AND
+        (@StaffID IS NULL OR staffID = @StaffID) AND
+        (@CleaningDate IS NULL OR CAST(cleaning_date AS DATE) = @CleaningDate) AND
+        (@Status IS NULL OR status = @Status);
+END;
+GO
+/****** Object:  StoredProcedure [inv].[inventoryAddEdit]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [inv].[inventoryAddEdit] (
+    @APIKey VARCHAR(255),
+    @itemID INT = NULL,  -- For editing, NULL means Add
+    @item_name VARCHAR(50),
+    @item_description VARCHAR(MAX),
+    @itemPrice DECIMAL(10,2),
+    @status VARCHAR(20) = 'Available'  -- Default to 'Available'
+)
+AS
+BEGIN
+    -- Check if the API key exists in the settings table
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        -- If API Key doesn't exist, throw an error
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+    BEGIN TRY
+        -- If itemID is provided, it's an Edit operation
+        IF @itemID IS NOT NULL
+        BEGIN
+            -- Edit the existing inventory record
+            UPDATE [inv].inventory
+            SET item_name = @item_name,
+                item_description = @item_description,
+                itemPrice = @itemPrice,
+                status = @status
+            WHERE itemID = @itemID;
+
+            -- Check if any rows were affected (if itemID doesn't exist)
+            IF @@ROWCOUNT = 0
+            BEGIN
+                THROW 50001, 'Inventory item not found for editing', 1;
+            END
+        END
+        ELSE
+        BEGIN
+            -- Add a new inventory record
+            INSERT INTO [inv].inventory (item_name, item_description, itemPrice, status)
+            VALUES (@item_name, @item_description, @itemPrice, @status);
+        END
+    END TRY
+    BEGIN CATCH
+        -- Handle any errors that occur in the try block
+        THROW;
+    END CATCH
+END;
+GO
+/****** Object:  StoredProcedure [inv].[inventoryGet]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [inv].[inventoryGet] (
+    @APIKey VARCHAR(255),
+    @ItemID INT = NULL,
+    @ItemName VARCHAR(50) = NULL,
+    @Status VARCHAR(20) = NULL
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Validate API Key
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+    -- Fetch inventory items based on optional filters
+    SELECT * 
+    FROM [inv].inventory
+    WHERE 
+        (@ItemID IS NULL OR itemID = @ItemID) AND
+        (@ItemName IS NULL OR item_name LIKE '%' + @ItemName + '%') AND
+        (@Status IS NULL OR status = @Status);
+END;
+GO
+/****** Object:  StoredProcedure [inv].[invoicesAddEdit]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [inv].[invoicesAddEdit] (
+    @APIKey VARCHAR(255),
+    @invoiceID INT = NULL, -- For Edit, if NULL, it's for Add
+    @bookingID INT,
+    @total_amount DECIMAL(10,2)
+)
+AS
+BEGIN
+    -- Check if the API key exists in the settings table
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        -- If API Key doesn't exist, throw an error
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+    BEGIN TRY
+        -- If invoiceID is provided, it's an Edit operation
+        IF @invoiceID IS NOT NULL
+        BEGIN
+            -- Edit the existing invoice
+            UPDATE [inv].invoices
+            SET bookingID = @bookingID,
+                total_amount = @total_amount
+            WHERE invoiceID = @invoiceID;
+
+            -- Check if any rows were affected (if invoiceID doesn't exist)
+            IF @@ROWCOUNT = 0
+            BEGIN
+                THROW 50001, 'Invoice not found for editing', 1;
+            END
+        END
+        ELSE
+        BEGIN
+            -- Add a new invoice
+            INSERT INTO [inv].invoices (bookingID, total_amount)
+            VALUES (@bookingID, @total_amount);
+        END
+    END TRY
+    BEGIN CATCH
+        -- Handle any errors that occur in the try block
+        THROW;
+    END CATCH
+END;
+GO
+/****** Object:  StoredProcedure [inv].[invoicesGet]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [inv].[invoicesGet] (
+    @APIKey VARCHAR(255),
+    @InvoiceID INT = NULL,
+    @BookingID INT = NULL,
+    @MinAmount DECIMAL(10,2) = NULL,
+    @MaxAmount DECIMAL(10,2) = NULL,
+    @InvoiceDate DATE = NULL
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Validate API Key
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+    -- Fetch invoices based on optional filters
+    SELECT * 
+    FROM [inv].invoices
+    WHERE 
+        (@InvoiceID IS NULL OR invoiceID = @InvoiceID) AND
+        (@BookingID IS NULL OR bookingID = @BookingID) AND
+        (@MinAmount IS NULL OR total_amount >= @MinAmount) AND
+        (@MaxAmount IS NULL OR total_amount <= @MaxAmount) AND
+        (@InvoiceDate IS NULL OR CAST(invoice_date AS DATE) = @InvoiceDate);
+END;
+GO
+/****** Object:  StoredProcedure [note].[hotelNotesAddEdit]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [note].[hotelNotesAddEdit] (
+    @APIKey VARCHAR(255),
+    @noteID INT = NULL,  -- For editing, NULL means Add
+    @note VARCHAR(MAX),
+    @userID INT
+)
+AS
+BEGIN
+    -- Check if the API key exists in the settings table
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        -- If API Key doesn't exist, throw an error
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+    BEGIN TRY
+        -- If noteID is provided, it's an Edit operation
+        IF @noteID IS NOT NULL
+        BEGIN
+            -- Edit the existing hotel note record
+            UPDATE [note].hotel_notes
+            SET note = @note,
+                userID = @userID
+            WHERE noteID = @noteID;
+
+            -- Check if any rows were affected (if noteID doesn't exist)
+            IF @@ROWCOUNT = 0
+            BEGIN
+                THROW 50001, 'Hotel note not found for editing', 1;
+            END
+        END
+        ELSE
+        BEGIN
+            -- Add a new hotel note record
+            INSERT INTO [note].hotel_notes (note, userID)
+            VALUES (@note, @userID);
+        END
+    END TRY
+    BEGIN CATCH
+        -- Handle any errors that occur in the try block
+        THROW;
+    END CATCH
+END;
+GO
+/****** Object:  StoredProcedure [note].[hotelNotesGet]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [note].[hotelNotesGet] (
+    @APIKey VARCHAR(255),
+    @NoteID INT = NULL,
+    @UserID INT = NULL
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Validate API Key
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+    -- Fetch hotel notes based on optional filters
+    SELECT * 
+    FROM [note].hotel_notes
+    WHERE 
+        (@NoteID IS NULL OR noteID = @NoteID) AND
+        (@UserID IS NULL OR userID = @UserID);
+END;
+GO
+/****** Object:  StoredProcedure [pay].[paymentsAddEdit]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [pay].[paymentsAddEdit] (
+    @APIKey VARCHAR(255),
+    @paymentID INT = NULL, -- For Edit, if NULL, it's for Add
+    @bookingID INT,
+    @amount DECIMAL(10,2),
+    @payment_method VARCHAR(20),
+    @status VARCHAR(20) = 'Pending'
+)
+AS
+BEGIN
+    -- Check if the API key exists in the settings table
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        -- If API Key doesn't exist, throw an error
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+    BEGIN TRY
+        -- If paymentID is provided, it's an Edit operation
+        IF @paymentID IS NOT NULL
+        BEGIN
+            -- Edit the existing payment
+            UPDATE [pay].payments
+            SET bookingID = @bookingID,
+                amount = @amount,
+                payment_method = @payment_method,
+                status = @status
+            WHERE paymentID = @paymentID;
+
+            -- Check if any rows were affected (if paymentID doesn't exist)
+            IF @@ROWCOUNT = 0
+            BEGIN
+                THROW 50001, 'Payment not found for editing', 1;
+            END
+        END
+        ELSE
+        BEGIN
+            -- Add a new payment
+            INSERT INTO [pay].payments (bookingID, amount, payment_method, status)
+            VALUES (@bookingID, @amount, @payment_method, @status);
+        END
+    END TRY
+    BEGIN CATCH
+        -- Handle any errors that occur in the try block
+        THROW;
+    END CATCH
+END;
+GO
+/****** Object:  StoredProcedure [pay].[paymentsGet]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [pay].[paymentsGet] (
+    @APIKey VARCHAR(255),
+    @PaymentID INT = NULL,
+    @BookingID INT = NULL,
+    @MinAmount DECIMAL(10,2) = NULL,
+    @MaxAmount DECIMAL(10,2) = NULL,
+    @PaymentMethod VARCHAR(20) = NULL,
+    @Status VARCHAR(20) = NULL,
+    @PaymentDate DATE = NULL
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Validate API Key
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+    -- Fetch payments based on optional filters
+    SELECT * 
+    FROM [pay].payments
+    WHERE 
+        (@PaymentID IS NULL OR paymentID = @PaymentID) AND
+        (@BookingID IS NULL OR bookingID = @BookingID) AND
+        (@MinAmount IS NULL OR amount >= @MinAmount) AND
+        (@MaxAmount IS NULL OR amount <= @MaxAmount) AND
+        (@PaymentMethod IS NULL OR payment_method = @PaymentMethod) AND
+        (@Status IS NULL OR status = @Status) AND
+        (@PaymentDate IS NULL OR CAST(payment_date AS DATE) = @PaymentDate);
+END;
+GO
+/****** Object:  StoredProcedure [pay].[PendingPaymentsCount]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [pay].[PendingPaymentsCount] (
+	@APIKey VARCHAR(255)
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Validate API Key
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+	SELECT COUNT(*) AS Count FROM [pay].payments WHERE status = 'Pending'
+END
+GO
+/****** Object:  StoredProcedure [room].[AvailableRoomsCount]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [room].[AvailableRoomsCount] (
+	@APIKey VARCHAR(255)
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Validate API Key
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+	SELECT COUNT(*) AS Count FROM [room].rooms WHERE status = 'Available'
+END
+GO
+/****** Object:  StoredProcedure [room].[AvailableTablesCount]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [room].[AvailableTablesCount] (
+	@APIKey VARCHAR(255)
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Validate API Key
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+	SELECT COUNT(*) AS Count FROM [tab].tables WHERE status = 'Available'
+END
+GO
+/****** Object:  StoredProcedure [room].[roomsAddEdit]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [room].[roomsAddEdit] (
+    @APIKey VARCHAR(255),
+    @roomID INT = NULL, -- For Edit, if NULL, it's for Add
+    @room_number VARCHAR(10),
+    @roomTypeID INT,
+    @status VARCHAR(20) = 'Available'
+)
+AS
+BEGIN
+    -- Check if the API key exists in the settings table
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        -- If API Key doesn't exist, throw an error
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+    BEGIN TRY
+        -- If roomID is provided, it's an Edit operation
+        IF @roomID IS NOT NULL
+        BEGIN
+            -- Edit the existing room
+            UPDATE [room].rooms
+            SET room_number = @room_number,
+                roomTypeID = @roomTypeID,
+                status = @status
+            WHERE roomID = @roomID;
+
+            -- Check if any rows were affected (if roomID doesn't exist)
+            IF @@ROWCOUNT = 0
+            BEGIN
+                THROW 50001, 'Room not found for editing', 1;
+            END
+        END
+        ELSE
+        BEGIN
+            -- Add a new room
+            INSERT INTO [room].rooms (room_number, roomTypeID, status)
+            VALUES (@room_number, @roomTypeID, @status);
+        END
+    END TRY
+    BEGIN CATCH
+        -- Handle any errors that occur in the try block
+        THROW;
+    END CATCH
+END;
+GO
+/****** Object:  StoredProcedure [room].[roomsGet]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [room].[roomsGet] (
+    @APIKey VARCHAR(255),
+    @RoomID INT = NULL,
+    @RoomNumber VARCHAR(10) = NULL,
+    @RoomTypeID INT = NULL,
+    @Status VARCHAR(20) = NULL
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Validate API Key
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+    -- Fetch rooms based on optional filters
+    SELECT * 
+    FROM [room].rooms
+    WHERE 
+        (@RoomID IS NULL OR roomID = @RoomID) AND
+        (@RoomNumber IS NULL OR room_number = @RoomNumber) AND
+        (@RoomTypeID IS NULL OR roomTypeID = @RoomTypeID) AND
+        (@Status IS NULL OR status = @Status);
+END;
+GO
+/****** Object:  StoredProcedure [room].[roomTypesAddEdit]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [room].[roomTypesAddEdit] (
+    @APIKey VARCHAR(255),
+    @roomTypeID INT = NULL, -- For Edit, if NULL, it's for Add
+    @type_name VARCHAR(50),
+    @description TEXT = NULL,
+    @price_per_night DECIMAL(10,2)
+)
+AS
+BEGIN
+    -- Check if the API key exists in the settings table
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        -- If API Key doesn't exist, throw an error
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+    BEGIN TRY
+        -- If roomTypeID is provided, it's an Edit operation
+        IF @roomTypeID IS NOT NULL
+        BEGIN
+            -- Edit the existing room type
+            UPDATE [room].room_types
+            SET type_name = @type_name,
+                description = @description,
+                price_per_night = @price_per_night
+            WHERE roomTypeID = @roomTypeID;
+
+            -- Check if any rows were affected (if roomTypeID doesn't exist)
+            IF @@ROWCOUNT = 0
+            BEGIN
+                THROW 50001, 'Room type not found for editing', 1;
+            END
+        END
+        ELSE
+        BEGIN
+            -- Add a new room type
+            INSERT INTO [room].room_types (type_name, description, price_per_night)
+            VALUES (@type_name, @description, @price_per_night);
+        END
+    END TRY
+    BEGIN CATCH
+        -- Handle any errors that occur in the try block
+        THROW;
+    END CATCH
+END;
+GO
+/****** Object:  StoredProcedure [room].[roomTypesGet]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [room].[roomTypesGet] (
+    @APIKey VARCHAR(255),
+    @RoomTypeID INT = NULL,
+    @TypeName VARCHAR(50) = NULL,
+    @MinPrice DECIMAL(10,2) = NULL,
+    @MaxPrice DECIMAL(10,2) = NULL
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Validate API Key
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+    -- Fetch room types based on optional filters
+    SELECT * 
+    FROM [room].room_types
+    WHERE 
+        (@RoomTypeID IS NULL OR roomTypeID = @RoomTypeID) AND
+        (@TypeName IS NULL OR type_name LIKE '%' + @TypeName + '%') AND
+        (@MinPrice IS NULL OR price_per_night >= @MinPrice) AND
+        (@MaxPrice IS NULL OR price_per_night <= @MaxPrice);
+END;
+GO
+/****** Object:  StoredProcedure [ser].[deleteExtraService]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [ser].[deleteExtraService] (
+    @serviceID INT,  -- Service ID to delete
+    @APIKey VARCHAR(255) -- API Key as input
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Check if the API key exists in the settings table
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        -- If API Key doesn't exist, throw an error
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+    -- Check if there are any service orders for this extra service
+    IF EXISTS (SELECT 1 FROM [ser].service_orders WHERE serviceID = @serviceID)
+    BEGIN
+        -- If there are service orders, throw an error
+        THROW 50000, 'Cannot delete the extra service. There are active service orders for this service.', 1;
+    END
+
+    -- Proceed with deletion if no service orders exist
+    DELETE FROM [ser].extra_services
+    WHERE serviceID = @serviceID;
+
+    -- Optionally, return a success message
+    PRINT 'Extra service deleted successfully';
+END;
+GO
+/****** Object:  StoredProcedure [ser].[extraServicesAddEdit]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [ser].[extraServicesAddEdit] (
+    @APIKey VARCHAR(255),
+    @serviceID INT = NULL,  -- For editing, NULL means Add
+    @service_name VARCHAR(50),
+    @description TEXT = NULL,  -- Description is optional
+    @price DECIMAL(10,2)
+)
+AS
+BEGIN
+    -- Check if the API key exists in the settings table
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        -- If API Key doesn't exist, throw an error
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+    BEGIN TRY
+        -- If serviceID is provided, it's an Edit operation
+        IF @serviceID IS NOT NULL
+        BEGIN
+            -- Edit the existing extra service record
+            UPDATE [ser].extra_services
+            SET service_name = @service_name,
+                description = @description,
+                price = @price
+            WHERE serviceID = @serviceID;
+
+            -- Check if any rows were affected (if serviceID doesn't exist)
+            IF @@ROWCOUNT = 0
+            BEGIN
+                THROW 50001, 'Extra service record not found for editing', 1;
+            END
+        END
+        ELSE
+        BEGIN
+            -- Add a new extra service record
+            INSERT INTO [ser].extra_services (service_name, description, price)
+            VALUES (@service_name, @description, @price);
+        END
+    END TRY
+    BEGIN CATCH
+        -- Handle any errors that occur in the try block
+        THROW;
+    END CATCH
+END;
+GO
+/****** Object:  StoredProcedure [ser].[extraServicesGet]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [ser].[extraServicesGet] (
+    @APIKey VARCHAR(255),
+    @ServiceID INT = NULL,
+    @ServiceName VARCHAR(50) = NULL,
+    @price DECIMAL(10,2) = NULL
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Validate API Key
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+    -- Fetch extra services based on optional filters
+    SELECT * 
+    FROM [ser].extra_services
+    WHERE 
+        (@ServiceID IS NULL OR serviceID = @ServiceID) AND
+        (@ServiceName IS NULL OR service_name LIKE '%' + @ServiceName + '%') AND
+        (@price IS NULL OR price = @price);
+END;
+GO
+/****** Object:  StoredProcedure [ser].[OrderCount]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [ser].[OrderCount] (
+	@APIKey VARCHAR(255)
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Validate API Key
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+	SELECT COUNT(*) AS Count FROM [ser].service_orders
+END
+GO
+/****** Object:  StoredProcedure [ser].[serviceOrdersAddEdit]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [ser].[serviceOrdersAddEdit] (
+    @APIKey VARCHAR(255),
+    @serviceOrderID INT = NULL,  -- For editing, NULL means Add
+    @bookingID INT,
+    @serviceID INT,
+    @order_date DATETIME,  -- Default to current date/time
+    @status VARCHAR(20) = 'Requested'  -- Default to 'Requested'
+)
+AS
+BEGIN
+    -- Check if the API key exists in the settings table
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        -- If API Key doesn't exist, throw an error
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+    BEGIN TRY
+        -- If serviceOrderID is provided, it's an Edit operation
+        IF @serviceOrderID IS NOT NULL
+        BEGIN
+            -- Edit the existing service order record
+            UPDATE [ser].service_orders
+            SET bookingID = @bookingID,
+                serviceID = @serviceID,
+                order_date = @order_date,
+                status = @status
+            WHERE serviceOrderID = @serviceOrderID;
+
+            -- Check if any rows were affected (if serviceOrderID doesn't exist)
+            IF @@ROWCOUNT = 0
+            BEGIN
+                THROW 50001, 'Service order record not found for editing', 1;
+            END
+        END
+        ELSE
+        BEGIN
+            -- Add a new service order record
+            INSERT INTO [ser].service_orders (bookingID, serviceID, order_date, status)
+            VALUES (@bookingID, @serviceID, @order_date, @status);
+        END
+    END TRY
+    BEGIN CATCH
+        -- Handle any errors that occur in the try block
+        THROW;
+    END CATCH
+END;
+GO
+/****** Object:  StoredProcedure [ser].[serviceOrdersGet]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [ser].[serviceOrdersGet] (
+    @APIKey VARCHAR(255),
+    @ServiceOrderID INT = NULL,
+    @BookingID INT = NULL,
+    @ServiceID INT = NULL,
+    @Status VARCHAR(20) = NULL
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Validate API Key
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+    -- Fetch service orders based on optional filters
+    SELECT * 
+    FROM [ser].service_orders
+    WHERE 
+        (@ServiceOrderID IS NULL OR serviceOrderID = @ServiceOrderID) AND
+        (@BookingID IS NULL OR bookingID = @BookingID) AND
+        (@ServiceID IS NULL OR serviceID = @ServiceID) AND
+        (@Status IS NULL OR status = @Status);
+END;
+GO
+/****** Object:  StoredProcedure [st].[deleteStaffPosition]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+Create PROCEDURE [st].[deleteStaffPosition] (
+    @positionID INT,  -- Position ID to delete
+    @APIKey VARCHAR(255) -- API Key as input
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Check if the API key exists in the settings table
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        -- If API Key doesn't exist, throw an error
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+    -- Check if there are any staff assigned to this position
+    IF EXISTS (SELECT 1 FROM [st].staff WHERE positionID = @positionID)
+    BEGIN
+        -- If staff is assigned to the position, throw an error
+        THROW 50000, 'Cannot delete position. There are staff members assigned to this position.', 1;
+    END
+
+    -- Proceed with deletion if no staff members are assigned
+    DELETE FROM [st].staff_positions
+    WHERE positionID = @positionID;
+
+    -- Optionally, return a success message
+    PRINT 'Staff position deleted successfully';
+END;
+GO
+/****** Object:  StoredProcedure [st].[staffAddEdit]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [st].[staffAddEdit] (
+    @APIKey VARCHAR(255),
+    @staffID INT = NULL,  -- For editing, NULL means Add
+    @userID INT,
+    @firstName VARCHAR(50),
+    @lastName VARCHAR(50),
+    @NIC VARCHAR(50),
+    @mobileNumber VARCHAR(50),
+    @positionID INT,
+    @salary DECIMAL(10,2),
+    @hired_date DATE,
+    @status VARCHAR(20) = 'Active'  -- Default to 'Active'
+)
+AS
+BEGIN
+    -- Check if the API key exists in the settings table
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        -- If API Key doesn't exist, throw an error
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+    BEGIN TRY
+        -- If staffID is provided, it's an Edit operation
+        IF @staffID IS NOT NULL
+        BEGIN
+            -- Edit the existing staff record
+            UPDATE [st].staff
+            SET userID = @userID,
+                firstName = @firstName,
+                lastName = @lastName,
+                NIC = @NIC,
+                mobileNumber = @mobileNumber,
+                positionID = @positionID,
+                salary = @salary,
+                hired_date = @hired_date,
+                status = @status
+            WHERE staffID = @staffID;
+
+            -- Check if any rows were affected (if staffID doesn't exist)
+            IF @@ROWCOUNT = 0
+            BEGIN
+                THROW 50001, 'Staff record not found for editing', 1;
+            END
+        END
+        ELSE
+        BEGIN
+            -- Add a new staff record
+            INSERT INTO [st].staff (userID, firstName, lastName, NIC, mobileNumber, positionID, salary, hired_date, status)
+            VALUES (@userID, @firstName, @lastName, @NIC, @mobileNumber, @positionID, @salary, @hired_date, @status);
+        END
+    END TRY
+    BEGIN CATCH
+        -- Handle any errors that occur in the try block
+        THROW;
+    END CATCH
+END;
+GO
+/****** Object:  StoredProcedure [st].[staffGet]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [st].[staffGet] (
+    @APIKey VARCHAR(255),
+    @StaffID INT = NULL,
+    @UserID INT = NULL,
+    @FirstName VARCHAR(50) = NULL,
+    @LastName VARCHAR(50) = NULL,
+    @NIC VARCHAR(50) = NULL,
+    @MobileNumber VARCHAR(50) = NULL,
+    @PositionID INT = NULL,
+    @SalaryMin DECIMAL(10,2) = NULL,
+    @SalaryMax DECIMAL(10,2) = NULL,
+    @HiredDate DATE = NULL,
+    @Status VARCHAR(20) = NULL
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Validate API Key
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+    -- Fetch staff based on optional filters
+    SELECT * 
+    FROM [st].staff
+    WHERE 
+        (@StaffID IS NULL OR staffID = @StaffID) AND
+        (@UserID IS NULL OR userID = @UserID) AND
+        (@FirstName IS NULL OR firstName LIKE '%' + @FirstName + '%') AND
+        (@LastName IS NULL OR lastName LIKE '%' + @LastName + '%') AND
+        (@NIC IS NULL OR NIC LIKE '%' + @NIC + '%') AND
+        (@MobileNumber IS NULL OR mobileNumber LIKE '%' + @MobileNumber + '%') AND
+        (@PositionID IS NULL OR positionID = @PositionID) AND
+        (@SalaryMin IS NULL OR salary >= @SalaryMin) AND
+        (@SalaryMax IS NULL OR salary <= @SalaryMax) AND
+        (@HiredDate IS NULL OR hired_date = @HiredDate) AND
+        (@Status IS NULL OR status = @Status);
+END;
+GO
+/****** Object:  StoredProcedure [st].[staffPositionAddEdit]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [st].[staffPositionAddEdit] (
+    @APIKey VARCHAR(255),
+    @positionID INT = NULL,  -- For editing, NULL means Add
+    @position_name VARCHAR(100)
+)
+AS
+BEGIN
+    -- Check if the API key exists in the settings table
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        -- If API Key doesn't exist, throw an error
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+    BEGIN TRY
+        -- If positionID is provided, it's an Edit operation
+        IF @positionID IS NOT NULL
+        BEGIN
+            -- Edit the existing staff position
+            UPDATE [st].staff_positions
+            SET position_name = @position_name
+            WHERE positionID = @positionID;
+
+            -- Check if any rows were affected (if positionID doesn't exist)
+            IF @@ROWCOUNT = 0
+            BEGIN
+                THROW 50001, 'Staff position record not found for editing', 1;
+            END
+        END
+        ELSE
+        BEGIN
+            -- Add a new staff position
+            INSERT INTO [st].staff_positions (position_name)
+            VALUES (@position_name);
+        END
+    END TRY
+    BEGIN CATCH
+        -- Handle any errors that occur in the try block
+        THROW;
+    END CATCH
+END;
+GO
+/****** Object:  StoredProcedure [st].[staffPositionsGet]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [st].[staffPositionsGet] (
+    @APIKey VARCHAR(255),
+    @PositionID INT = NULL,
+    @PositionName VARCHAR(100) = NULL
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Validate API Key
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+    -- Fetch staff positions based on optional filters
+    SELECT * 
+    FROM [st].staff_positions
+    WHERE 
+        (@PositionID IS NULL OR positionID = @PositionID) AND
+        (@PositionName IS NULL OR position_name LIKE '%' + @PositionName + '%');
+END;
+GO
+/****** Object:  StoredProcedure [syst].[settingsAddEdit]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [syst].[settingsAddEdit] (
+    @APIKey VARCHAR(255),
+    @SettingID INT = NULL,  -- For editing, NULL means Add
+    @SettingName VARCHAR(MAX),
+    @SettingValue VARCHAR(MAX)
+)
+AS
+BEGIN
+    -- Check if the API key exists in the settings table
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        -- If API Key doesn't exist, throw an error
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+    BEGIN TRY
+        -- If SettingID is provided, it's an Edit operation
+        IF @SettingID IS NOT NULL
+        BEGIN
+            -- Edit the existing setting record
+            UPDATE [syst].Settings
+            SET SettingName = @SettingName,
+                SettingValue = @SettingValue
+            WHERE SettingID = @SettingID;
+
+            -- Check if any rows were affected (if SettingID doesn't exist)
+            IF @@ROWCOUNT = 0
+            BEGIN
+                THROW 50001, 'Setting record not found for editing', 1;
+            END
+        END
+        ELSE
+        BEGIN
+            -- Add a new setting record
+            INSERT INTO [syst].Settings (SettingName, SettingValue)
+            VALUES (@SettingName, @SettingValue);
+        END
+    END TRY
+    BEGIN CATCH
+        -- Handle any errors that occur in the try block
+        THROW;
+    END CATCH
+END;
+GO
+/****** Object:  StoredProcedure [syst].[settingsGet]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [syst].[settingsGet] (
+    @APIKey VARCHAR(255),
+    @SettingID INT = NULL,
+    @SettingName VARCHAR(MAX) = NULL
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Validate API Key
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+    -- Fetch settings based on optional filters
+    SELECT * 
+    FROM [syst].Settings
+    WHERE 
+        (@SettingID IS NULL OR SettingID = @SettingID) AND
+        (@SettingName IS NULL OR SettingName LIKE '%' + @SettingName + '%');
+END;
+GO
+/****** Object:  StoredProcedure [tab].[AvailableTablesCount]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [tab].[AvailableTablesCount] (
+	@APIKey VARCHAR(255)
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Validate API Key
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+	SELECT COUNT(*) AS Count FROM [tab].tables WHERE status = 'Available'
+END
+GO
+/****** Object:  StoredProcedure [tab].[tablesAddEdit]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [tab].[tablesAddEdit] (
+    @APIKey VARCHAR(255),
+    @tableID INT = NULL, -- For Edit, if NULL, it's for Add
+    @table_number VARCHAR(10),
+    @tableTypeID INT,
+    @status VARCHAR(20)
+)
+AS
+BEGIN
+    -- Check if the API key exists in the settings table
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        -- If API Key doesn't exist, throw an error
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+    BEGIN TRY
+        -- If tableID is provided, it's an Edit operation
+        IF @tableID IS NOT NULL
+        BEGIN
+            -- Edit the existing table
+            UPDATE [tab].tables
+            SET table_number = @table_number,
+                tableTypeID = @tableTypeID,
+                status = @status
+            WHERE tableID = @tableID;
+
+            -- Check if any rows were affected (if tableID doesn't exist)
+            IF @@ROWCOUNT = 0
+            BEGIN
+                THROW 50001, 'Table not found for editing', 1;
+            END
+        END
+        ELSE
+        BEGIN
+            -- Add a new table
+            INSERT INTO [tab].tables (table_number, tableTypeID, status)
+            VALUES (@table_number, @tableTypeID, @status);
+        END
+    END TRY
+    BEGIN CATCH
+        -- Handle any errors that occur in the try block
+        THROW;
+    END CATCH
+END;
+GO
+/****** Object:  StoredProcedure [tab].[tablesGet]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [tab].[tablesGet] (
+    @APIKey VARCHAR(255),
+    @TableID INT = NULL,
+    @TableNumber VARCHAR(10) = NULL,
+    @TableTypeID INT = NULL,
+    @Status VARCHAR(20) = NULL
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Validate API Key
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+    -- Fetch tables based on optional filters
+    SELECT * 
+    FROM [tab].tables
+    WHERE 
+        (@TableID IS NULL OR tableID = @TableID) AND
+        (@TableNumber IS NULL OR table_number = @TableNumber) AND
+        (@TableTypeID IS NULL OR tableTypeID = @TableTypeID) AND
+        (@Status IS NULL OR status = @Status);
+END;
+GO
+/****** Object:  StoredProcedure [tab].[tableTypesAddEdit]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [tab].[tableTypesAddEdit] (
+    @APIKey VARCHAR(255),
+    @tableTypeID INT = NULL, -- For Edit, if NULL, it's for Add
+    @type_name VARCHAR(50),
+    @description TEXT,
+    @price_per_hour DECIMAL(10,2)
+)
+AS
+BEGIN
+    -- Check if the API key exists in the settings table
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        -- If API Key doesn't exist, throw an error
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+    BEGIN TRY
+        -- If tableTypeID is provided, it's an Edit operation
+        IF @tableTypeID IS NOT NULL
+        BEGIN
+            -- Edit the existing table type
+            UPDATE [tab].table_types
+            SET type_name = @type_name,
+                description = @description,
+                price_per_hour = @price_per_hour
+            WHERE tableTypeID = @tableTypeID;
+
+            -- Check if any rows were affected (if tableTypeID doesn't exist)
+            IF @@ROWCOUNT = 0
+            BEGIN
+                THROW 50001, 'Table Type not found for editing', 1;
+            END
+        END
+        ELSE
+        BEGIN
+            -- Add a new table type
+            INSERT INTO [tab].table_types (type_name, description, price_per_hour)
+            VALUES (@type_name, @description, @price_per_hour);
+        END
+    END TRY
+    BEGIN CATCH
+        -- Handle any errors that occur in the try block
+        THROW;
+    END CATCH
+END;
+GO
+/****** Object:  StoredProcedure [tab].[tableTypesGet]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [tab].[tableTypesGet] (
+    @APIKey VARCHAR(255),
+    @TableTypeID INT = NULL,
+    @TypeName VARCHAR(50) = NULL,
+    @MinPrice DECIMAL(10,2) = NULL,
+    @MaxPrice DECIMAL(10,2) = NULL
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Validate API Key
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+    -- Fetch table types based on optional filters
+    SELECT * 
+    FROM [tab].table_types
+    WHERE 
+        (@TableTypeID IS NULL OR tableTypeID = @TableTypeID) AND
+        (@TypeName IS NULL OR type_name LIKE '%' + @TypeName + '%') AND
+        (@MinPrice IS NULL OR price_per_hour >= @MinPrice) AND
+        (@MaxPrice IS NULL OR price_per_hour <= @MaxPrice);
+END;
+GO
+/****** Object:  StoredProcedure [user].[rolesAddEdit]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [user].[rolesAddEdit] (
+    @APIKey VARCHAR(255),
+    @roleID INT = NULL, -- If NULL, it's an Add, otherwise Edit
+    @role_name VARCHAR(20),
+    @permissions NVARCHAR(MAX)
+)
+AS
+BEGIN
+    -- Turn on exception handling
+    BEGIN TRY
+        -- Check if the API key exists in the settings table
+        IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+        BEGIN
+            -- If API Key doesn't exist, throw an error
+            THROW 50000, 'Invalid API Key', 1;
+        END
+        
+        -- Handle Add or Edit based on the presence of @roleID
+        IF @roleID IS NULL
+        BEGIN
+            -- Add New Role
+            IF EXISTS (SELECT 1 FROM [user].roles WHERE role_name = @role_name)
+            BEGIN
+                -- If the role already exists, throw an error
+                THROW 50001, 'Role already exists.', 1;
+            END
+            
+            -- Insert new role record
+            INSERT INTO [user].roles (role_name, permissions)
+            VALUES (@role_name, @permissions);
+            
+            -- Return the newly added role (optional)
+            SELECT * FROM [user].roles WHERE role_name = @role_name;
+        END
+        ELSE
+        BEGIN
+            -- Edit Existing Role
+            IF NOT EXISTS (SELECT 1 FROM [user].roles WHERE roleID = @roleID)
+            BEGIN
+                -- If the role doesn't exist, throw an error
+                THROW 50002, 'Role not found.', 1;
+            END
+            
+            -- Update the existing role record
+            UPDATE [user].roles
+            SET role_name = @role_name,
+                permissions = @permissions
+            WHERE roleID = @roleID;
+
+            -- Return the updated role record (optional)
+            SELECT * FROM [user].roles WHERE roleID = @roleID;
+        END
+    END TRY
+    BEGIN CATCH
+        -- Capture and throw any errors
+        DECLARE @ErrorMessage NVARCHAR(MAX), @ErrorNumber INT;
+        SELECT @ErrorMessage = ERROR_MESSAGE(), @ErrorNumber = ERROR_NUMBER();
+        THROW @ErrorNumber, @ErrorMessage, 1;
+    END CATCH
+END;
+GO
+/****** Object:  StoredProcedure [user].[rolesGet]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [user].[rolesGet] (
+    @APIKey VARCHAR(255),
+    @RoleName VARCHAR(20) = NULL -- Optional Role Filter
+)
+AS
+BEGIN
+    -- Enable exception handling
+    BEGIN TRY
+        -- Check if the API key exists in the settings table
+        IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+        BEGIN
+            -- If API Key is invalid, throw an error
+            THROW 50000, 'Invalid API Key', 1;
+        END
+
+        -- Fetch roles (filtered if RoleName is provided)
+        SELECT * 
+        FROM [user].roles
+        WHERE (@RoleName IS NULL OR role_name = @RoleName);
+    
+    END TRY
+    BEGIN CATCH
+        -- Handle any unexpected errors
+        PRINT ERROR_MESSAGE();
+        THROW;
+    END CATCH
+END;
+GO
+/****** Object:  StoredProcedure [user].[usersAddEdit]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [user].[usersAddEdit] (
+    @APIKey VARCHAR(255),
+    @userID INT = NULL, -- To differentiate Add (NULL) or Edit (existing userID)
+	@staffID INT,
+    @username VARCHAR(50),
+    @password_hash VARCHAR(255),
+    @roleID INT,
+    @email VARCHAR(100),
+    @phone VARCHAR(15),
+    @status VARCHAR(20)
+)
+AS
+BEGIN
+    -- Turn on exception handling
+    BEGIN TRY
+        -- Check if the API key exists in the settings table
+        IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+        BEGIN
+            -- If API Key doesn't exist, throw an error
+            THROW 50000, 'Invalid API Key', 1;
+        END
+        
+        -- Handle Add or Edit based on the presence of @userID
+        IF @userID IS NULL
+        BEGIN
+            -- Add New User
+            IF EXISTS (SELECT 1 FROM [user].users WHERE username = @username OR email = @email)
+            BEGIN
+                -- If the username or email already exists, throw an error
+                THROW 50001, 'Username or Email already exists.', 1;
+            END
+            
+            -- Insert new user record
+            INSERT INTO [user].users (staffID, username, password_hash, roleID, email, phone, status)
+            VALUES (@staffID, @username, @password_hash, @roleID, @email, @phone, @status);
+            
+            -- Return the newly added user (optional)
+            SELECT * FROM [user].users WHERE username = @username;
+        END
+        ELSE
+        BEGIN
+            -- Edit Existing User
+            IF NOT EXISTS (SELECT 1 FROM [user].users WHERE userID = @userID)
+            BEGIN
+                -- If the user doesn't exist, throw an error
+                THROW 50002, 'User not found.', 1;
+            END
+            
+            -- Check if the username or email is being updated and if they already exist
+            IF EXISTS (SELECT 1 FROM [user].users WHERE (username = @username OR email = @email) AND userID != @userID)
+            BEGIN
+                -- If the username or email already exists for another user, throw an error
+                THROW 50003, 'Username or Email already exists for another user.', 1;
+            END
+            
+            -- Update the existing user record
+            UPDATE [user].users
+            SET staffID = @staffID,
+				username = @username,
+                password_hash = @password_hash,
+                roleID = @roleID,
+                email = @email,
+                phone = @phone,
+                status = @status
+            WHERE userID = @userID;
+
+            -- Return the updated user record (optional)
+            SELECT * FROM [user].users WHERE userID = @userID;
+        END
+    END TRY
+    BEGIN CATCH
+        -- Capture and throw any errors
+        DECLARE @ErrorMessage NVARCHAR(MAX), @ErrorNumber INT;
+        SELECT @ErrorMessage = ERROR_MESSAGE(), @ErrorNumber = ERROR_NUMBER();
+        THROW @ErrorNumber, @ErrorMessage, 1;
+    END CATCH
+END;
+GO
+/****** Object:  StoredProcedure [user].[usersGet]    Script Date: 3/10/2025 3:08:42 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [user].[usersGet] (
+    @APIKey VARCHAR(255),
+    @UserID INT = NULL,
+	@StaffID INT = NULL,
+    @Username VARCHAR(50) = NULL,
+    @RoleID INT = NULL,
+	@email VARCHAR(100) = NULL,
+	@phone VARCHAR(15) = NULL,
+    @Status VARCHAR(20) = NULL
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Validate API Key
+    IF NOT EXISTS (SELECT 1 FROM syst.Settings WHERE SettingName = 'APIKey' AND SettingValue = @APIKey)
+    BEGIN
+        THROW 50000, 'Invalid API Key', 1;
+    END
+
+    -- Fetch users based on optional filters
+    SELECT * 
+    FROM [user].users
+    WHERE 
+        (@UserID IS NULL OR userID = @UserID) AND
+		(@StaffID IS NULL OR staffID = @StaffID) AND
+        (@Username IS NULL OR username = @Username) AND
+        (@RoleID IS NULL OR roleID = @RoleID) AND
+		(@email IS NULL OR email = @email) AND
+		(@phone IS NULL OR phone = @email) AND
+        (@Status IS NULL OR status = @Status);
+END;
+GO

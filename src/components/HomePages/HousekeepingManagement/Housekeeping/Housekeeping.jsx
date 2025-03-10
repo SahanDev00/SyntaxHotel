@@ -1,32 +1,48 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Pencil, Trash2, CheckCircle, XCircle, Plus } from "lucide-react";
+import axios from 'axios'
 
 const Housekeeping = () => {
-  // Sample housekeeping data (Replace this with API data later)
-  const housekeepingData = [
-    {
-      housekeepingID: 1,
-      roomID: 101,
-      staffName: "Alice",
-      cleaningDate: "2024-02-27",
-      status: "Pending",
-    },
-    {
-      housekeepingID: 2,
-      roomID: 102,
-      staffName: "Bob",
-      cleaningDate: "2024-02-28",
-      status: "In Progress",
-    },
-    {
-      housekeepingID: 3,
-      roomID: 103,
-      staffName: "Charlie",
-      cleaningDate: "2024-02-26",
-      status: "Completed",
-    },
-    // Add more housekeeping records as needed
-  ];
+
+  const [housekeeping, setHousekeeping] = useState([]);
+  const [staffName, setStaffName] = useState([]);
+  const [room, setRoom] = useState([]);
+
+  useEffect(() => {
+    const fetchHousekeeping = async () => {
+      try {
+        const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/housekeeping/housekeeping`, {
+          headers: {
+            APIkey: process.env.REACT_APP_APIKey
+          }
+        })
+        setHousekeeping(response.data)
+
+        if (response.data.length > 0) { 
+          const staffID = response.data[0].staffID; 
+          const staffResponse = await axios.get(`${process.env.REACT_APP_BASE_URL}/staff/staff?staffID=${staffID}`, {
+            headers: {
+              APIkey: process.env.REACT_APP_APIKey
+            }
+          });
+          setStaffName(staffResponse.data);
+        }
+
+        if (response.data.length > 0) { 
+          const roomID = response.data[0].roomID; 
+          const roomResponse = await axios.get(`${process.env.REACT_APP_BASE_URL}/hotel/rooms?RoomID=${roomID}`, {
+            headers: {
+              APIkey: process.env.REACT_APP_APIKey
+            }
+          });
+          setRoom(roomResponse.data);
+        }
+      } catch (err) {
+        console.log(err)
+      }
+    }
+    fetchHousekeeping();
+  }, [])
 
   return (
     <div className="p-6 bg-gray-100 min-h-screen font-overpass">
@@ -44,7 +60,7 @@ const Housekeeping = () => {
           <thead className="bg-purple-950 text-white uppercase text-sm tracking-wider">
             <tr>
               <th className="px-4 py-3 font-semibold">Housekeeping ID</th>
-              <th className="px-4 py-3 font-semibold">Room ID</th>
+              <th className="px-4 py-3 font-semibold">Room</th>
               <th className="px-4 py-3 font-semibold">Staff Name</th>
               <th className="px-4 py-3 font-semibold">Cleaning Date</th>
               <th className="px-4 py-3 font-semibold">Status</th>
@@ -52,7 +68,7 @@ const Housekeeping = () => {
             </tr>
           </thead>
           <tbody>
-            {housekeepingData.map((task, index) => (
+            {housekeeping.map((task, index) => (
               <tr
                 key={task.housekeepingID}
                 className={`text-gray-800 text-sm font-medium ${
@@ -60,9 +76,9 @@ const Housekeeping = () => {
                 }`}
               >
                 <td className="px-4 py-3">{task.housekeepingID}</td>
-                <td className="px-4 py-3">{task.roomID}</td>
-                <td className="px-4 py-3">{task.staffName}</td>
-                <td className="px-4 py-3">{task.cleaningDate}</td>
+                <td className="px-4 py-3">{room.length > 0 ? room[0].room_number : "Unknown"}</td>
+                <td className="px-4 py-3">{staffName.length > 0 ? staffName[0].firstName : "Unknown"}</td>
+                <td className="px-4 py-3">{new Date(task.cleaning_date).toLocaleString()}</td>
                 <td className="px-4 py-3">
                   <span
                     className={`${

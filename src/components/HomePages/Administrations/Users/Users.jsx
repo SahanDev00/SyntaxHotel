@@ -1,37 +1,54 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { Pencil, Plus, Trash2 } from 'lucide-react'
+import axios from 'axios'
 
 const Users = () => {
-  // Sample data for users (Replace this with actual data fetching logic)
-  const usersData = [
-    {
-      userID: 1,
-      username: "john_doe",
-      email: "john.doe@example.com",
-      role: "Admin",
-      phone: "123-456-7890",
-      status: "Active",
-      createdAt: "2024-01-01",
-    },
-    {
-      userID: 2,
-      username: "jane_doe",
-      email: "jane.doe@example.com",
-      role: "Manager",
-      phone: "234-567-8901",
-      status: "Active",
-      createdAt: "2024-01-05",
-    },
-    {
-      userID: 3,
-      username: "alex_smith",
-      email: "alex.smith@example.com",
-      role: "Staff",
-      phone: "345-678-9012",
-      status: "Inactive",
-      createdAt: "2024-02-01",
+
+  const [users, setUsers] = useState([]);
+  const [staffName, setStaffName] = useState([]);
+  const [roleName, setRoleName] = useState([]);
+
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/administration/users`, {
+          headers: {
+            APIkey: process.env.REACT_APP_APIKey
+          }
+        })
+        setUsers(response.data)
+        console.log(response.data)
+
+        //staff name
+        if (response.data.length > 0) { 
+          const staffID = response.data[0].staffID; 
+          const staffResponse = await axios.get(`${process.env.REACT_APP_BASE_URL}/staff/staff?staffID=${staffID}`, {
+            headers: {
+              APIkey: process.env.REACT_APP_APIKey
+            }
+          });
+          setStaffName(staffResponse.data);
+          console.log(staffResponse.data)
+        }
+
+        //roles
+        if (response.data.length > 0) { 
+          const roleID = response.data[0].roleID; 
+          const roleResponse = await axios.get(`${process.env.REACT_APP_BASE_URL}/administration/roles?roleID=${roleID}`, {
+            headers: {
+              APIkey: process.env.REACT_APP_APIKey
+            }
+          });
+          setRoleName(roleResponse.data);
+          console.log(roleResponse.data)
+        }
+
+      } catch (err) {
+        console.log(err)
+      }
     }
-  ]
+    fetchUsers();
+  }, [])
 
   return (
     <div className="p-6 bg-gray-100 min-h-screen font-overpass">
@@ -49,6 +66,7 @@ const Users = () => {
           <thead className="bg-yellow-950 text-white uppercase text-sm tracking-wider">
             <tr>
               <th className="px-4 py-3 font-semibold">User ID</th>
+              <th className="px-4 py-3 font-semibold">Staff Name</th>
               <th className="px-4 py-3 font-semibold">Username</th>
               <th className="px-4 py-3 font-semibold">Email</th>
               <th className="px-4 py-3 font-semibold">Phone</th>
@@ -59,7 +77,7 @@ const Users = () => {
             </tr>
           </thead>
           <tbody>
-            {usersData.map((user, index) => (
+            {users.map((user, index) => (
               <tr
                 key={user.userID}
                 className={`text-gray-800 text-sm font-medium ${
@@ -67,12 +85,13 @@ const Users = () => {
                 }`}
               >
                 <td className="px-4 py-3">{user.userID}</td>
+                <td className="px-4 py-3">{staffName.length > 0 ? staffName[0].firstName : "Unknown"}</td>
                 <td className="px-4 py-3">{user.username}</td>
                 <td className="px-4 py-3">{user.email}</td>
                 <td className="px-4 py-3">{user.phone}</td>
-                <td className="px-4 py-3">{user.role}</td>
+                <td className="px-4 py-3">{roleName.length > 0 ? roleName[0].role_name : "Unknown"}</td>
                 <td className="px-4 py-3">{user.status}</td>
-                <td className="px-4 py-3">{user.createdAt}</td>
+                <td className="px-4 py-3">{new Date(user.created_at).toLocaleString()}</td>
                 <td className="px-4 py-3 flex justify-end gap-3">
                   <button className="text-blue-600 hover:text-blue-800">
                     <Pencil size={18} />

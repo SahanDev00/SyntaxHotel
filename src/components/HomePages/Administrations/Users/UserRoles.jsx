@@ -1,26 +1,28 @@
+import axios from 'axios';
 import { Pencil, Trash2 } from 'lucide-react'
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 
 const UserRoles = () => {
-  // Sample data for roles (Replace with actual data fetching logic)
-  const rolesData = [
-    {
-      roleID: 1,
-      role_name: "Admin"
-    },
-    {
-      roleID: 2,
-      role_name: "Manager"
-    },
-    {
-      roleID: 3,
-      role_name: "Receptionist"
-    },
-    {
-      roleID: 4,
-      role_name: "Staff"
-    },
-  ]
+
+  const [userRoles, setUserRoles] = useState([]);
+
+  useEffect(() => {
+    const fetchUserRoles = async () => {
+      try {
+        const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/administration/roles`, {
+          headers: {
+            APIkey: process.env.REACT_APP_APIKey
+          }
+        })
+        setUserRoles(response.data)
+        console.log(response.data)
+
+      } catch (err) {
+        console.log(err)
+      }
+    }
+    fetchUserRoles();
+  }, [])
 
   return (
     <div className="p-6 bg-gray-100 min-h-screen font-overpass">
@@ -36,11 +38,12 @@ const UserRoles = () => {
             <tr>
               <th className="px-4 py-3 font-semibold">Role ID</th>
               <th className="px-4 py-3 font-semibold">Role Name</th>
+              <th className="px-4 py-3 font-semibold">Permissions</th>
               <th className="px-4 py-3 text-right font-semibold">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {rolesData.map((role, index) => (
+            {userRoles.map((role, index) => (
               <tr
                 key={role.roleID}
                 className={`text-gray-800 text-sm font-medium ${
@@ -49,6 +52,7 @@ const UserRoles = () => {
               >
                 <td className="px-4 py-3">{role.roleID}</td>
                 <td className="px-4 py-3">{role.role_name}</td>
+                <td className="px-4 py-3">{role.permissions}</td>
                 <td className="px-4 py-3 flex justify-end gap-3">
                   <button className="text-blue-600 hover:text-blue-800">
                     <Pencil size={18} />

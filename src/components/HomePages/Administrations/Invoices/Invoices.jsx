@@ -1,29 +1,44 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import axios from 'axios';
 
 const Invoices = () => {
+  const [invoiceData, setInvoiceData] = useState([]);
+  const [customerNames, setCustomerNames] = useState({});
   const [filterDate, setFilterDate] = useState('');
-  const [invoiceData, setInvoiceData] = useState([
-    // Sample invoice data (you should replace this with actual data)
-    {
-      invoiceID: 1,
-      bookingID: 101,
-      customerName: 'John Doe',
-      amount: 450.00,
-      paymentMethod: 'Card',
-      status: 'Completed',
-      paymentDate: '2024-03-01',
-    },
-    {
-      invoiceID: 2,
-      bookingID: 102,
-      customerName: 'Jane Smith',
-      amount: 200.00,
-      paymentMethod: 'Cash',
-      status: 'Completed',
-      paymentDate: '2024-03-05',
-    },
-    // Add more data as needed
-  ]);
+
+  useEffect(() => {
+    const fetchInvoices = async () => {
+      try {
+        const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/payments/payments`, {
+          headers: {
+            APIkey: process.env.REACT_APP_APIKey
+          }
+        });
+        setInvoiceData(response.data);
+
+        // Fetch customer name for each invoice
+        const customerNamePromises = response.data.map(async (invoice) => {
+          const customerResponse = await axios.get(`${process.env.REACT_APP_BASE_URL}/customers/customerbybookingid?BookingID=${invoice.bookingID}`, {
+            headers: {
+              APIkey: process.env.REACT_APP_APIKey
+            }
+          });
+          return { [invoice.bookingID]: customerResponse.data };  // store customer data by bookingID
+        });
+
+        const customerData = await Promise.all(customerNamePromises);
+        const customerNamesObj = customerData.reduce((acc, data) => {
+          return { ...acc, ...data };
+        }, {});
+
+        setCustomerNames(customerNamesObj);
+
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    fetchInvoices();
+  }, []);
 
   // Filter data based on the selected date
   const handleFilterDate = () => {
@@ -70,39 +85,48 @@ const Invoices = () => {
       </div>
 
       <div className="w-full h-full overflow-auto">
-        <div className="w-full">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-gray-200">
-                <th className="py-3 px-4 text-left text-black font-medium">Invoice ID</th>
-                <th className="py-3 px-4 text-left text-black font-medium">Customer Name</th>
-                <th className="py-3 px-4 text-left text-black font-medium">Booking ID</th>
-                <th className="py-3 px-4 text-left text-black font-medium">Amount</th>
-                <th className="py-3 px-4 text-left text-black font-medium">Payment Method</th>
-                <th className="py-3 px-4 text-left text-black font-medium">Status</th>
-                <th className="py-3 px-4 text-left text-black font-medium">Payment Date</th>
-              </tr>
-            </thead>
-            <tbody>
-              {invoiceData.map((invoice, index) => (
-                <tr
-                  key={invoice.invoiceID}
-                  className={`${
-                    index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
-                  } border-b border-gray-300`}
-                >
-                  <td className="py-4 px-4 text-gray-700">{invoice.invoiceID}</td>
-                  <td className="py-4 px-4 text-gray-700">{invoice.customerName}</td>
+        <table className="w-full">
+          <thead>
+            <tr className="bg-gray-200">
+              <th className="py-3 px-4 text-left text-black font-medium">Invoice ID</th>
+              <th className="py-3 px-4 text-left text-black font-medium">Customer Name</th>
+              <th className="py-3 px-4 text-left text-black font-medium">Booking ID</th>
+              <th className="py-3 px-4 text-left text-black font-medium">Amount</th>
+              <th className="py-3 px-4 text-left text-black font-medium">Payment Method</th>
+              <th className="py-3 px-4 text-left text-black font-medium">Status</th>
+              <th className="py-3 px-4 text-left text-black font-medium">Payment Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            {invoiceData.map((invoice, index) => {
+              const customerName = customerNames[invoice.bookingID]?.[0]?.full_name || "Unknown";
+
+              return (
+                <tr key={invoice.paymentID} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} border-b border-gray-300`}>
+                  <td className="py-4 px-4 text-gray-700">{invoice.paymentID}</td>
+                  <td className="py-4 px-4 text-gray-700">{customerName}</td>
                   <td className="py-4 px-4 text-gray-700">{invoice.bookingID}</td>
-                  <td className="py-4 px-4 text-gray-700">${invoice.amount.toFixed(2)}</td>
-                  <td className="py-4 px-4 text-gray-700">{invoice.paymentMethod}</td>
-                  <td className="py-4 px-4 text-gray-700">{invoice.status}</td>
-                  <td className="py-4 px-4 text-gray-700">{invoice.paymentDate}</td>
+                  <td className="py-4 px-4 text-gray-700">${invoice.amount ? invoice.amount.toFixed(2) : 'N/A'}</td>
+                  <td className="py-4 px-4 text-gray-700">{invoice.payment_method}</td>
+                  <td className="py-4 px-4 text-gray-700">
+                    <span
+                      className={`${
+                        invoice.status === "Pending"
+                          ? "text-yellow-500"
+                          : invoice.status === "Cancelled"
+                          ? "text-red-500"
+                          : "text-green-500"
+                      } font-semibold`}
+                    >
+                      {invoice.status}
+                    </span>
+                  </td>
+                  <td className="py-4 px-4 text-gray-700">{new Date(invoice.payment_date).toLocaleString()}</td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   );
