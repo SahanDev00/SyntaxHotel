@@ -23,6 +23,8 @@ import Invoices from '../HomePages/Administrations/Invoices/Invoices'
 import Users from '../HomePages/Administrations/Users/Users'
 import UserRoles from '../HomePages/Administrations/Users/UserRoles'
 import Reports from '../HomePages/Reports/Reports/Reports'
+import AddCustomers from '../HomePages/CustomerManagement/Customers/AddCustomers'
+import AddCustomerCategory from '../HomePages/CustomerManagement/Customers/AddCustomerCategory'
 
 const Index = () => {
 
@@ -48,8 +50,8 @@ const Index = () => {
               {activePage === 'room-types' && <RoomTypes />}
               {activePage === 'inventory' && <Inventory />}
               {activePage === 'hotel-notes' && <HotelNotes />}
-              {activePage === 'customers' && <Customers />}
-              {activePage === 'customer-category' && <CustomerCategory />}
+              {activePage === 'customers' && <Customers setActivePage={setActivePage} />}
+              {activePage === 'customer-category' && <CustomerCategory setActivePage={setActivePage}  />}
               {activePage === 'customer-notes' && <CustomerNotes />}
               {activePage === 'room-bookings' && <RoomBookings />}
               {activePage === 'table-bookings' && <TableBookings />}
@@ -63,6 +65,8 @@ const Index = () => {
               {activePage === 'users' && <Users />}
               {activePage === 'user-roles' && <UserRoles />}
               {activePage === 'reports' && <Reports />}
+              {activePage === 'add-customers' && <AddCustomers />}
+              {activePage === 'add-customer-categories' && <AddCustomerCategory />}
             </div>
         </div>
     </div>

@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { Pencil, Plus, Info } from "lucide-react";
-import axios from 'axios'
+import axios from 'axios';
 
-const Customers = () => {
+const Customers = ({ setActivePage }) => {
 
   const [customers, setCustomers] = useState([]);
   const [customerTypes, setCustomerTypes] = useState([]);
@@ -38,9 +38,9 @@ const Customers = () => {
       {/* Page Header */}
       <div className="flex justify-between items-center mb-6 border-b pb-3">
         <h1 className="text-2xl font-bold text-gray-900">Customers</h1>
-        <button className="flex items-center gap-2 bg-purple-700 text-white px-5 py-2 text-sm font-semibold uppercase hover:bg-purple-800 transition">
-          <Plus size={18} /> Add Customer
-        </button>
+          <button onClick={() => setActivePage('add-customers')} className="flex items-center gap-2 bg-purple-700 text-white px-5 py-2 text-sm font-semibold uppercase hover:bg-purple-800 transition">
+            <Plus size={18} /> Add Customer
+          </button>
       </div>
 
       {/* Table */}

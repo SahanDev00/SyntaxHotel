@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Pencil, Trash, Plus } from "lucide-react";
 import axios from "axios";
 
-const CustomerCategory = () => {
+const CustomerCategory = ({ setActivePage }) => {
 
   const [customerCategories, setCustomerCategories] = useState([]);
 
@@ -27,7 +27,7 @@ const CustomerCategory = () => {
       {/* Page Header */}
       <div className="flex justify-between items-center mb-6 border-b pb-3">
         <h1 className="text-2xl font-bold text-gray-900">Customer Categories</h1>
-        <button className="flex items-center gap-2 bg-blue-700 text-white px-5 py-2 text-sm font-semibold uppercase hover:bg-blue-800 transition">
+        <button onClick={() => setActivePage('add-customer-categories')} className="flex items-center gap-2 bg-blue-700 text-white px-5 py-2 text-sm font-semibold uppercase hover:bg-blue-800 transition">
           <Plus size={18} /> Add Category
         </button>
       </div>

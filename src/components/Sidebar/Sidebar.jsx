@@ -68,7 +68,7 @@ const Sidebar = ({activePage, setActivePage }) => {
         {/* Customer Management */}
         <div className='w-full mt-4'>
           <h1 className='sidebar-main'>Customer Management</h1>
-          <ul className={`sidebar-nav group ${activePage === 'customers' && 'text-purple-700'}`} onClick={() => setActivePage('customers')}>
+          <ul className={`sidebar-nav group ${ (activePage === 'customers' || activePage === 'add-customers') && 'text-purple-700'}`} onClick={() => setActivePage('customers')}>
             <FiUser className='sidebar-icon' />
             <li className='sidebar-item'>Customers</li>
           </ul>
@@ -84,7 +84,7 @@ const Sidebar = ({activePage, setActivePage }) => {
             <ChevronDown className={`sidebar-icon duration-200 ${isDropDownOpen === 'CustomerManagement' && 'rotate-180'}`} />
           </ul>
           <ul className={`duration-200 overflow-hidden ${isDropDownOpen === 'CustomerManagement' ? 'h-[30px]' : 'h-0'}`}>
-              <li className={`sidebar-dropdown-item ${activePage === 'customer-category' && 'text-purple-700'}`} onClick={() => setActivePage('customer-category')}><FaRegCircle className='size-2 mb-1' />Customer Category</li>
+              <li className={`sidebar-dropdown-item ${(activePage === 'customer-category' || activePage === 'add-customer-categories') && 'text-purple-700'}`} onClick={() => setActivePage('customer-category')}><FaRegCircle className='size-2 mb-1' />Customer Category</li>
           </ul>
         </div>
 
