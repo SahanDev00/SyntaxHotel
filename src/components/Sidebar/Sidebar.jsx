@@ -84,7 +84,7 @@ const Sidebar = ({activePage, setActivePage }) => {
             <ChevronDown className={`sidebar-icon duration-200 ${isDropDownOpen === 'CustomerManagement' && 'rotate-180'}`} />
           </ul>
           <ul className={`duration-200 overflow-hidden ${isDropDownOpen === 'CustomerManagement' ? 'h-[30px]' : 'h-0'}`}>
-              <li className={`sidebar-dropdown-item ${(activePage === 'customer-category' || activePage === 'add-customer-categories') && 'text-purple-700'}`} onClick={() => setActivePage('customer-category')}><FaRegCircle className='size-2 mb-1' />Customer Category</li>
+              <li className={`sidebar-dropdown-item ${(activePage === 'customer-category' || activePage === 'add-customer-categories' || activePage === 'edit-customer-categories') && 'text-purple-700'}`} onClick={() => setActivePage('customer-category')}><FaRegCircle className='size-2 mb-1' />Customer Category</li>
           </ul>
         </div>
 

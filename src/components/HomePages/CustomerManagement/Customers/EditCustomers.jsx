@@ -4,26 +4,47 @@ import { useFormik } from "formik";
 import * as Yup from "yup";
 import { toast } from "react-toastify";
 import 'react-toastify/dist/ReactToastify.css';
+import { useParams } from "react-router-dom";
 
-const AddCustomer = () => {
+const EditCustomers = () => {
   const [loading, setLoading] = useState(false);
-  const [customerCategories, setCustomerCategories] = useState([]);
+  const { customerID } = useParams();
+  const [customerCategory, setCustomerCategory] = useState([]);
+  const [customer, setCustomer] = useState(null);
 
-  useEffect(() => {
-    const fetchCustomerCategories = async () => {
+  const fetchCustomers = async () => {
+      try {
+      const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/customers/customers?CustomerID=${customerID}`, {
+          headers: {
+          APIkey: process.env.REACT_APP_APIKey
+          },
+      });  
+      setCustomer(response.data);
+      console.log(response.data)
+  } catch (err) {
+      console.log(err);
+      }
+  };  
+  
+  const fetchCustomerCategory = async () => {
       try {
         const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/customers/category`, {
           headers: {
             APIkey: process.env.REACT_APP_APIKey
           }
-        })
-        setCustomerCategories(response.data)
+        });
+  
+        setCustomerCategory(response.data);
       } catch (err) {
-        console.log(err)
+        console.log(err);
       }
-    }
-    fetchCustomerCategories();
-  }, [])
+  };
+
+  useEffect(() => {
+    fetchCustomers();
+    fetchCustomerCategory();
+  }, []);
+
 
   // Form Validation Schema
   const validationSchema = Yup.object().shape({
@@ -36,21 +57,22 @@ const AddCustomer = () => {
     customer_categoryID: Yup.string()
       .required("Category ID is required"),
     address: Yup.string().required("Address is required"),
-    status: Yup.string().oneOf(["Active", "Inactive"], "Invalid status"),
+    status: Yup.string().oneOf(["Active", "Innactive"], "Invalid status"),
     banned_reason: Yup.string().nullable(),
   });
 
   // Formik for form handling
   const formik = useFormik({
     initialValues: {
-      CustomerID: null, // Always null for adding a new customer
-      customer_categoryID: "",
-      full_name: "",
-      phone: "",
-      email: "",
-      address: "",
-      status: "Active"
+      CustomerID: customerID, // Always null for adding a new customer
+      customer_categoryID: customer?.[0].customer_categoryID || "",
+      full_name: customer?.[0].full_name || "",
+      phone: customer?.[0].phone || "",
+      email: customer?.[0].email || "",
+      address: customer?.[0].address || "",
+      status: customer?.[0].status || "Active"
     },
+    enableReinitialize: true, // Allows form to reinitialize when data is fetched
     validationSchema,
     onSubmit: async (values) => {
       setLoading(true);
@@ -71,14 +93,13 @@ const AddCustomer = () => {
             autoClose: 2000,
           })
         } else {
-          toast.success("Customer added successfully!", {
+          toast.success("Customer Edited successfully!", {
             position: "top-right",
             autoClose: 2000,
           });
-          formik.resetForm();
         }
       } catch (err) {
-        toast.error('Failed to add customer', {
+        toast.error('Failed to edit customer', {
           position: "top-right",
           autoClose: 2000,
         })
@@ -93,7 +114,7 @@ const AddCustomer = () => {
     <div className="p-6 bg-gray-50 min-h-screen font-overpass">
       {/* Page Header */}
       <div className="flex justify-between items-center mb-6 pb-3 border-b">
-        <h1 className="text-2xl font-bold text-gray-900">Add Customer</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Edit Customer</h1>
       </div>
 
       {/* Customer Form */}
@@ -155,7 +176,7 @@ const AddCustomer = () => {
               className="w-full p-2 border rounded mt-1 text-black"
             >
               <option value="">Select a category</option>
-              {customerCategories.map((category) => (
+              {customerCategory.map((category) => (
                 <option key={category.categoryID} value={category.categoryID}>
                   {category.category_name}
                 </option>
@@ -165,8 +186,6 @@ const AddCustomer = () => {
               <p className="text-red-500 text-sm">{formik.errors.customer_categoryID}</p>
             )}
           </div>
-
-
 
           {/* Address */}
           <div className="col-span-2">
@@ -191,7 +210,7 @@ const AddCustomer = () => {
               className="w-full px-5 py-2 border rounded mt-1"
             >
               <option value="Active">Active</option>
-              <option value="Inactive">Inactive</option>
+              <option value="Innactive">Inactive</option>
             </select>
             {formik.touched.status && formik.errors.status && (
               <p className="text-red-500 text-sm">{formik.errors.status}</p>
@@ -217,4 +236,4 @@ const AddCustomer = () => {
   );
 };
 
-export default AddCustomer;
+export default EditCustomers;

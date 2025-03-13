@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Pencil, Plus, Info } from "lucide-react";
 import axios from 'axios';
+import { Link } from "react-router-dom";
 
 const Customers = ({ setActivePage }) => {
 
@@ -14,24 +15,37 @@ const Customers = ({ setActivePage }) => {
           headers: {
             APIkey: process.env.REACT_APP_APIKey
           }
-        })
-        setCustomers(response.data)
-
-        if (response.data.length > 0) { 
-          const customerCategoryID = response.data[0].CustomerCategoryID; 
-          const typeResponse = await axios.get(`${process.env.REACT_APP_BASE_URL}/customers/category?CustomerCategoryID=${customerCategoryID}`, {
-            headers: {
-              APIkey: process.env.REACT_APP_APIKey
-            }
-          });
-          setCustomerTypes(typeResponse.data);
-        }
+        });
+  
+        setCustomers(response.data);
+  
+        // Fetch all unique customer categories
+        const categoryIDs = [...new Set(response.data.map(c => c.customer_categoryID))]; // Get unique category IDs
+        const categoryResponses = await Promise.all(
+          categoryIDs.map(id =>
+            axios.get(`${process.env.REACT_APP_BASE_URL}/customers/category?CategoryID=${id}`, {
+              headers: { APIkey: process.env.REACT_APP_APIKey }
+            })
+          )
+        );
+  
+        // Map categories to an object { categoryID: categoryData }
+        const categoriesMap = {};
+        categoryResponses.forEach(res => {
+          if (res.data.length > 0) {
+            categoriesMap[res.data[0].categoryID] = res.data[0].category_name;
+          }
+        });
+  
+        setCustomerTypes(categoriesMap);
       } catch (err) {
-        console.log(err)
+        console.log(err);
       }
-    }
+    };
+  
     fetchCustomers();
-  }, [])
+  }, []);
+  
 
   return (
     <div className="p-6 bg-gray-100 min-h-screen font-overpass">
@@ -69,7 +83,7 @@ const Customers = ({ setActivePage }) => {
               >
                 <td className="px-4 py-3">{customer.CustomerID}</td>
                 <td className="px-4 py-3">{customer.full_name}</td>
-                <td className="px-4 py-3">{customerTypes.length > 0 ? customerTypes[0].category_name : "Unknown"}</td>
+                <td className="px-4 py-3">{customerTypes[customer.customer_categoryID] || "Unknown"}</td>
                 <td className="px-4 py-3">{customer.phone}</td>
                 <td className="px-4 py-3">{customer.email}</td>
                 <td className="px-4 py-3">{customer.address}</td>
@@ -94,9 +108,11 @@ const Customers = ({ setActivePage }) => {
                   {new Date(customer.created_at).toLocaleString()}
                 </td>
                 <td className="px-4 py-3 flex justify-end gap-3">
-                  <button className="text-blue-600 hover:text-blue-800">
-                    <Pencil size={18} />
-                  </button>
+                  <Link to={`/edit-customer/${customer.CustomerID}`}>
+                    <button className="text-blue-600 hover:text-blue-800">
+                      <Pencil size={18} />
+                    </button>
+                  </Link>
                 </td>
               </tr>
             ))}
