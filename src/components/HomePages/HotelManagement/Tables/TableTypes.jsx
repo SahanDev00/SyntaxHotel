@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Pencil, Trash, Plus } from "lucide-react";
 import axios from "axios";
+import { Link } from 'react-router-dom'
 
 const TableTypes = () => {
 
@@ -30,9 +31,11 @@ const TableTypes = () => {
       {/* Page Header */}
       <div className="flex justify-between items-center mb-6 border-b pb-3">
         <h1 className="text-2xl font-bold text-gray-900">Table Types</h1>
-        <button className="flex items-center gap-2 bg-purple-700 text-white px-5 py-2 text-sm font-semibold uppercase hover:bg-purple-800 transition">
-          <Plus size={18} /> Add Table Type
-        </button>
+        <Link to='/add-table-types'>
+          <button className="flex items-center gap-2 bg-purple-700 text-white px-5 py-2 text-sm font-semibold uppercase hover:bg-purple-800 transition">
+            <Plus size={18} /> Add Table Type
+          </button>
+        </Link>
       </div>
 
       {/* Table */}
@@ -58,10 +61,12 @@ const TableTypes = () => {
                 <td className="px-4 py-3">{type.tableTypeID}</td>
                 <td className="px-4 py-3">{type.type_name}</td>
                 <td className="px-4 py-3">{type.description}</td>
-                <td className="px-4 py-3 font-bold text-green-600">Rs. {type.price_per_hour}</td>
+                <td className="px-4 py-3 font-bold text-green-600">{type.price_per_hour}</td>
                 <td className="px-4 py-3 flex justify-end gap-3">
                   <button className="text-blue-600 hover:text-blue-800">
-                    <Pencil size={18} />
+                    <Link to={`/edit-table-type/${type.tableTypeID}`}>
+                      <Pencil size={18} />
+                    </Link>
                   </button>
                   <button className="text-red-600 hover:text-red-800">
                     <Trash size={18} />

@@ -34,7 +34,7 @@ const AddCustomer = () => {
       .required("Phone is required"),
     email: Yup.string().email("Invalid email").required("Email is required"),
     customer_categoryID: Yup.string()
-      .required("Category ID is required"),
+      .required("Category is required"),
     address: Yup.string().required("Address is required"),
     status: Yup.string().oneOf(["Active", "Inactive"], "Invalid status"),
     banned_reason: Yup.string().nullable(),

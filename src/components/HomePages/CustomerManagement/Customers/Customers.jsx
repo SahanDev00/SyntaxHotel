@@ -108,11 +108,11 @@ const Customers = ({ setActivePage }) => {
                   {new Date(customer.created_at).toLocaleString()}
                 </td>
                 <td className="px-4 py-3 flex justify-end gap-3">
-                  <Link to={`/edit-customer/${customer.CustomerID}`}>
-                    <button className="text-blue-600 hover:text-blue-800">
-                      <Pencil size={18} />
-                    </button>
-                  </Link>
+                  <button className="text-blue-600 hover:text-blue-800">
+                    <Link to={`/edit-customer/${customer.CustomerID}`}>
+                        <Pencil size={18} />
+                    </Link>
+                  </button>
                 </td>
               </tr>
             ))}
