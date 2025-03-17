@@ -25,6 +25,7 @@ import UserRoles from '../HomePages/Administrations/Users/UserRoles'
 import Reports from '../HomePages/Reports/Reports/Reports'
 import AddCustomers from '../HomePages/CustomerManagement/Customers/AddCustomers'
 import AddCustomerCategory from '../HomePages/CustomerManagement/Customers/AddCustomerCategory'
+import BillingAndCheckout from '../HomePages/BillingAndCheckout/BillingAndCheckout'
 
 const Index = () => {
 
@@ -44,6 +45,7 @@ const Index = () => {
             {/* main content */}
             <div className='w-full h-full overflow-y-auto'>
               {activePage === 'dashboard' && <Dashboard />}
+              {activePage === 'billing' && <BillingAndCheckout />}
               {activePage === 'rooms' && <Rooms />}
               {activePage === 'tables' && <Tables />}
               {activePage === 'table-types' && <TableTypes />}

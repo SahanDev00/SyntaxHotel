@@ -92,6 +92,10 @@ const MiniSidebar = ({activePage, setActivePage }) => {
         {/* Bookings Management */}
         <div className='w-full mt-4'>
           <h1 className='sidebar-main'>Booking Management</h1>
+          <ul className={`sidebar-nav group ${activePage === 'billing' && 'text-purple-700'}`} onClick={() => setActivePage('billing')}>
+            <Box className='sidebar-icon' />
+            <li className='sidebar-item'>Billing & Checkout</li>
+          </ul>
           <ul className={`sidebar-nav group ${activePage === 'room-bookings' && 'text-purple-700'}`} onClick={() => setActivePage('room-bookings')}>
             <Bed className='sidebar-icon' />
             <li className='sidebar-item'>Room Bookings</li>

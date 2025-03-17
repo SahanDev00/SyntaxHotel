@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import { useFormik } from "formik";
 import * as Yup from "yup";
@@ -12,7 +12,7 @@ const EditRoomTypes = () => {
   const { roomTypeID } = useParams();
   const [roomType, setRoomType] = useState(null);
 
-  const fetchRoomTypes = async () => {
+  const fetchRoomTypes = useCallback(async () => {
     try {
       const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/hotel/roomtypes?RoomTypeID=${roomTypeID}`, {
         headers: {
@@ -25,11 +25,11 @@ const EditRoomTypes = () => {
     } catch (error) {
       console.error("Error fetching data:", error);
     }
-  };
+  }, [roomTypeID]);
 
   useEffect(() => {
     fetchRoomTypes();
-  }, [])
+  }, [fetchRoomTypes])
 
   // Form Validation Schema
   const validationSchema = Yup.object().shape({

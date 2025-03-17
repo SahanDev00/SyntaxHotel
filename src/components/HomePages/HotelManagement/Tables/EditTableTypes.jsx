@@ -28,7 +28,7 @@ const EditTableTypes = () => {
     };
   
     fetchTableTypes();
-  }, [])
+  }, [tableTypeID])
 
   // Form Validation Schema
   const validationSchema = Yup.object().shape({
@@ -70,7 +70,6 @@ const EditTableTypes = () => {
             position: "top-right",
             autoClose: 2000,
           });
-          formik.resetForm();
         }
       } catch (err) {
         toast.error("Failed to edit Table type");

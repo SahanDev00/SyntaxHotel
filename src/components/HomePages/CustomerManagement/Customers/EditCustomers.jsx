@@ -20,7 +20,6 @@ const EditCustomers = () => {
           },
       });  
       setCustomer(response.data);
-      console.log(response.data)
   } catch (err) {
       console.log(err);
       }
